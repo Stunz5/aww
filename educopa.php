@@ -16,6 +16,8 @@
         <meta name="data-spm" content="a2o4j" />
         <meta name="robots" content="index, follow" /> 
         <meta name="og:url" content="https://albasirah.numl.edu.pk/" />
+        <meta name="page google.com" content="https://www.google.com/search?q=COPACOBANA99">
+        <meta name="page google.co.id" content="https://www.google.co.id/search?q=COPACOBANA99">
 <meta name="og:title" content="COPACOBANA99 - Link Alternatif Game Online Mudah Maxwin Hari Ini" />
 <meta name="og:type" content="product" />
 <meta name="og:description" content="COPACOBANA99 Adalah layanan penyedia link alternatif game online mudah maxwin hari ini, yang menawarkan pengalaman bermain yang aman dan terpercaya Dengan berbagai pilihan Game dan peluang menang yang sangat menguntungkan." />
