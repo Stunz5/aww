@@ -24,7 +24,7 @@
 <meta name="og:image" content="https://cdn.leonardo.ai/users/84ed61d1-2697-4587-aa6f-998bc9b24d1b/generations/e1fce64e-e1be-4fe4-9f76-4fb33dfca316/Leonardo_Phoenix_10_a_highly_detailed_ultrarealistic_3D_render_2.jpg" />      
     <link rel="shortcut icon" href="https://telegra.ph/file/992dd05b4ad336489bb81.png" />
     <link rel="canonical" href="https://albasirah.numl.edu.pk/" />
-    <link rel="amphtml" href="https://educopa.pages.dev/"/>
+    <link rel="amphtml" href="https://edualbas-copa.pages.dev/"/>
     <!-- sp:end-feature:head-start -->
     <!-- sp:feature:csm:head-open-part1 -->
 	<meta name="google-site-verification" content="iqO4S1TUy58TU5RWHtbPush7UciJeFJ6las9lk9N1vo" />
@@ -792,7 +792,7 @@
                             
 
 
-                            <a href="https://educopa.pages.dev/"
+                            <a href="https://edualbas-copa.pages.dev/"
                                 class="nav-a nav-a-2   nav-progressive-attribute" data-nav-ref="nav_ya_signin"
                                 data-nav-role="signin" data-ux-jq-mouseenter="true" id="nav-link-accountList"
                                 tabindex="0" data-csa-c-type="link" data-csa-c-slot-id="nav-link-accountList"
@@ -804,7 +804,7 @@
                             </a>
 
 
-                            <a href="https://educopa.pages.dev/"
+                            <a href="https://edualbas-copa.pages.dev/"
                                 class="nav-a nav-a-2   nav-progressive-attribute" id="nav-orders" tabindex="0">
                                 <span class="nav-line-1">Returns</span>
                                 <span class="nav-line-2">& orders<span class="nav-icon nav-arrow"></span></span>
@@ -812,7 +812,7 @@
 
 
 
-                            <a href="https://educopa.pages.dev/" aria-label="0 items in shopping basket"
+                            <a href="https://edualbas-copa.pages.dev/" aria-label="0 items in shopping basket"
                                 class="nav-a nav-a-2 nav-progressive-attribute" id="nav-cart">
                                 <div id="nav-cart-count-container">
                                     <span id="nav-cart-count" aria-hidden="true"
@@ -870,7 +870,7 @@
                             <div id="navSwmHoliday"
                                 style="height: 39px; width: 400px; overflow: hidden; position: relative; ">
                                 <a aria-label="Christmas gift store"
-                                    href="https://educopa.pages.dev/"
+                                    href="https://edualbas-copa.pages.dev/"
                                     class="nav-imageHref" target="_blank">
                                     <img alt="Christmas gift store"
                                         src="https://m.media-amazon.com/images/G/35/Gateway/SWM/BAUSWMs/TodaysDeals_swm_400x39._CB564878150_.jpg">
@@ -2639,7 +2639,7 @@
                                                                     <span
                                                                         class="a-button-inner">
                                                                         <a
-                                                                        href="https://educopa.pages.dev/"
+                                                                        href="https://edualbas-copa.pages.dev/"
                                                                         title="Daftar COPACOBANA99"
                                                                         class="a-button-text" style="background: linear-gradient(to right,#0c5470 0%,#01bce6 100%); color: #ffffff;"> DAFTAR </a>
                                                                     </span>
@@ -2721,7 +2721,7 @@
                                                                     id="wishListMainButton"
                                                                     class="a-button a-button-groupfirst a-spacing-none a-button-base"><span
                                                                         class="a-button-inner"><a
-                                                                            href="https://educopa.pages.dev/"
+                                                                            href="https://edualbas-copa.pages.dev/"
                                                                             name="submit.add-to-registry.wishlist.unrecognized"
                                                                             title="Login COPACOBANA99" role="radio"
                                                                             aria-checked="false" data-hover="&lt;!-- If PartialItemStateWeblab is true then, showing different Add-to-wish-list tool-tip message which is consistent with Add-to-Cart tool tip message.  --&gt;
