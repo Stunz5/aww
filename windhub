@@ -195,49 +195,62 @@ local function StartAutoFish()
     fishLoop = true
     task.spawn(function()
         while fishLoop and S.AutoFish do
-            pcall(function()
+            local ok, err = pcall(function()
+
+                task.wait(0.15) -- guard minimum agar tidak crash
+
                 -- Step 1: Pastikan rod equipped
                 local tool = getFishingTool()
                 if tool and not Char:FindFirstChild(tool.Name) then
                     equipTool(tool)
+                    task.wait(0.5)
                 end
 
-                -- Step 2: Cast (klik untuk lempar)
-                if S.AutoCast then
+                -- Step 2: Cast
+                if S.AutoCast and fishLoop then
                     clickMouse()
                     fishStats.casts += 1
-                    task.wait(S.CastDelay)
+                    task.wait(math.max(S.CastDelay, 0.1))
                 end
 
-                -- Step 3: Tunggu minigame muncul
+                -- Step 3: Tunggu minigame muncul (max 15 detik)
                 local waited = 0
-                while waited < 12 and not isFishingActive() do
-                    task.wait(0.1)
-                    waited += 0.1
+                while fishLoop and waited < 15 and not isFishingActive() do
+                    task.wait(0.25)
+                    waited += 0.25
                 end
 
-                -- Step 4: Auto reel / shake saat minigame aktif
-                if isFishingActive() then
+                -- Step 4: Reel / shake
+                if fishLoop and isFishingActive() then
                     local reelTime = 0
-                    while isFishingActive() and reelTime < 15 do
+                    while fishLoop and isFishingActive() and reelTime < 20 do
                         if S.AutoReel or S.AutoShake then
                             clickMouse()
                         end
-                        task.wait(S.ReelDelay)
-                        reelTime += S.ReelDelay
+                        local d = math.max(S.ReelDelay, 0.08)
+                        task.wait(d)
+                        reelTime += d
                     end
                     fishStats.catches += 1
                 end
 
+                task.wait(0.5)
+
                 -- Step 5: Auto sell
-                if S.AutoSell then
-                    task.wait(0.3)
+                if S.AutoSell and fishLoop then
                     tryAutoSell()
                     fishStats.sold += 1
+                    task.wait(math.max(S.SellDelay, 0.3))
                 end
 
-                task.wait(0.2)
+                task.wait(0.3)
             end)
+
+            if not ok then
+                -- Error → tunggu sebelum retry
+                warn("[FishHub] Error: " .. tostring(err))
+                task.wait(2)
+            end
         end
     end)
 end
