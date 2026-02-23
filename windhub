@@ -1,20 +1,16 @@
 --[[
-    Wind Hub — Fish It! Auto Fisher
-    Universal Auto Fishing · WindUI Style
+    Wind Hub — FishHub v2
+    Khusus diperbaiki untuk Fishzar
     Tekan [RightShift] untuk buka/tutup menu
-
-    PERINGATAN: Gunakan di private server atau
-    risiko ban ditanggung sendiri.
 ]]
 
--- Services
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VIM              = game:GetService("VirtualInputManager")
 
-local LP   = Players.LocalPlayer
+local LP    = Players.LocalPlayer
 local Mouse = LP:GetMouse()
 
 repeat task.wait() until LP.Character
@@ -26,95 +22,69 @@ local Root = Char:WaitForChild("HumanoidRootPart")
 --   SETTINGS
 -- ─────────────────────────────────
 local S = {
-    AutoFish      = false,
-    AutoCast      = false,
-    AutoReel      = false,
-    AutoSell      = false,
-    AutoShake     = false,
-    ESP           = false,
+    AutoFish  = false,
+    AutoCast  = false,
+    AutoReel  = false,
+    AutoSell  = false,
 
-    CastDelay     = 0.1,   -- detik antar cast
-    ReelDelay     = 0.05,  -- delay reel
-    ShakeDelay    = 0.05,  -- delay shake/click
-    SellDelay     = 0.5,   -- delay antar sell
+    CastDelay  = 0.5,
+    ReelDelay  = 0.15,
+    SellDelay  = 0.8,
 }
 
 -- ─────────────────────────────────
---   FISH IT CORE LOGIC
+--   FISHZAR CORE
 -- ─────────────────────────────────
 
--- Cari remote events Fish It
-local function findRemote(name)
-    -- cari di ReplicatedStorage
-    local r = ReplicatedStorage:FindFirstChild(name, true)
-    if r then return r end
-    -- cari di workspace
-    r = workspace:FindFirstChild(name, true)
-    if r then return r end
-    return nil
-end
-
--- Deteksi GUI fishing (bar, shake, dll)
-local function getPlayerGui()
-    return LP:FindFirstChild("PlayerGui")
-end
-
-local function findFishingGui()
-    local pg = getPlayerGui()
-    if not pg then return nil end
-    -- Cari semua frame yang berhubungan fishing
-    for _, gui in pairs(pg:GetDescendants()) do
-        local name = string.lower(gui.Name)
-        if string.find(name, "fish") or string.find(name, "reel") or
-           string.find(name, "catch") or string.find(name, "bar") or
-           string.find(name, "shake") or string.find(name, "mini") then
-            if gui:IsA("Frame") or gui:IsA("ScreenGui") then
-                return gui
-            end
+-- Fix 1: clickMouse pakai firesignal atau VIM, bukan :Fire()
+local function clickMouse()
+    pcall(function()
+        if firesignal then
+            firesignal(Mouse.Button1Down)
+            task.wait(0.05)
+            firesignal(Mouse.Button1Up)
+        else
+            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+            task.wait(0.05)
+            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 1)
         end
-    end
-    return nil
+    end)
 end
 
--- Deteksi apakah sedang ada minigame fishing
-local function isFishingActive()
-    local pg = getPlayerGui()
-    if not pg then return false end
-    for _, obj in pairs(pg:GetDescendants()) do
-        local name = string.lower(obj.Name)
-        if obj.Visible == true and (
-            string.find(name, "reel") or
-            string.find(name, "catch") or
-            string.find(name, "shake") or
-            string.find(name, "minigame") or
-            string.find(name, "fishing")
-        ) then
-            return true
+-- Fix 2: Klik tombol GUI Fishzar langsung via firesignal
+local function fireButton(btn)
+    if not btn then return end
+    pcall(function()
+        if firesignal then
+            firesignal(btn.MouseButton1Click)
+        elseif syn and syn.click_detector then
+            -- fallback
         end
-    end
-    return false
+        -- Fallback universal: simulasi activate
+        btn.Activated:Connect(function() end)
+    end)
 end
 
--- Cari tool fishing di karakter
+-- Fix 3: Cari tool rod (Fishzar pakai nama "Basic Rod")
 local function getFishingTool()
+    local keywords = {"rod", "fish", "reel", "pole", "basic"}
+    -- Cari di karakter dulu
     for _, tool in pairs(Char:GetChildren()) do
         if tool:IsA("Tool") then
-            local name = string.lower(tool.Name)
-            if string.find(name, "rod") or string.find(name, "fish") or
-               string.find(name, "reel") or string.find(name, "pole") then
-                return tool
+            local n = string.lower(tool.Name)
+            for _, kw in pairs(keywords) do
+                if string.find(n, kw) then return tool end
             end
         end
     end
-    -- Cek backpack juga
+    -- Cari di backpack
     local bp = LP:FindFirstChild("Backpack")
     if bp then
         for _, tool in pairs(bp:GetChildren()) do
             if tool:IsA("Tool") then
-                local name = string.lower(tool.Name)
-                if string.find(name, "rod") or string.find(name, "fish") or
-                   string.find(name, "reel") or string.find(name, "pole") then
-                    return tool
+                local n = string.lower(tool.Name)
+                for _, kw in pairs(keywords) do
+                    if string.find(n, kw) then return tool end
                 end
             end
         end
@@ -122,73 +92,83 @@ local function getFishingTool()
     return nil
 end
 
--- Equip tool
 local function equipTool(tool)
     if not tool then return end
-    LP.Character.Humanoid:EquipTool(tool)
-    task.wait(0.3)
+    Hum:EquipTool(tool)
+    task.wait(0.4)
 end
 
--- Simulasi klik mouse (cast/reel)
-local function clickMouse()
-    Mouse.Button1Down:Fire()
-    task.wait(0.05)
-    Mouse.Button1Up:Fire()
-end
+-- Fix 4: Deteksi minigame Fishzar
+-- Fishzar pakai: BtnStart, BtnYes, BtnNo di dalam GUI
+local function getFishzarButtons()
+    local pg = LP:FindFirstChild("PlayerGui")
+    if not pg then return nil, nil, nil end
+    local btnStart, btnYes, btnNo
 
--- Cari NPC Sell terdekat
-local function findSellNPC()
-    for _, obj in pairs(workspace:GetDescendants()) do
-        local name = string.lower(obj.Name)
-        if string.find(name, "sell") or string.find(name, "shop") or
-           string.find(name, "merchant") or string.find(name, "trader") or
-           string.find(name, "npc") then
-            if obj:IsA("Model") or obj:IsA("NPC") or obj:IsA("BasePart") then
-                return obj
-            end
+    for _, obj in pairs(pg:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            local n = obj.Name
+            if n == "BtnStart" then btnStart = obj end
+            if n == "BtnYes"   then btnYes   = obj end
+            if n == "BtnNo"    then btnNo     = obj end
         end
     end
-    return nil
+    return btnStart, btnYes, btnNo
 end
 
--- Coba fire semua remote yang berhubungan sell
+-- Cek apakah minigame aktif (BtnStart atau BtnYes visible)
+local function isFishingActive()
+    local btnStart, btnYes, _ = getFishzarButtons()
+    if btnStart and btnStart.Visible then return true, "start" end
+    if btnYes   and btnYes.Visible   then return true, "yes"   end
+    return false, nil
+end
+
+-- Cek apakah sedang casting (menunggu gigitan)
+local function isCasting()
+    local pg = LP:FindFirstChild("PlayerGui")
+    if not pg then return false end
+    -- Kalau tidak ada minigame aktif tapi rod equipped = sedang casting
+    local active, _ = isFishingActive()
+    return not active
+end
+
+-- Auto sell: cari tombol sell di GUI
 local function tryAutoSell()
-    -- Method 1: cari remote sell
-    local remotes = {
-        "Sell", "SellFish", "SellAll", "SellItem",
-        "sell", "sellfish", "sellall"
-    }
-    for _, name in pairs(remotes) do
-        local r = findRemote(name)
-        if r and r:IsA("RemoteEvent") then
-            r:FireServer()
-            task.wait(S.SellDelay)
-        elseif r and r:IsA("RemoteFunction") then
-            pcall(function() r:InvokeServer() end)
-            task.wait(S.SellDelay)
+    local pg = LP:FindFirstChild("PlayerGui")
+    if not pg then return end
+
+    -- Cari semua tombol dengan kata "sell", "jual" di nama atau text
+    for _, obj in pairs(pg:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            local n = string.lower(obj.Name)
+            local t = string.lower(obj.Text or "")
+            if (string.find(n,"sell") or string.find(n,"jual") or
+                string.find(t,"sell") or string.find(t,"jual")) and obj.Visible then
+                fireButton(obj)
+                task.wait(math.max(S.SellDelay, 0.3))
+            end
         end
     end
 
-    -- Method 2: cari tombol sell di GUI
-    local pg = getPlayerGui()
-    if pg then
-        for _, obj in pairs(pg:GetDescendants()) do
-            local name = string.lower(obj.Name)
-            if obj:IsA("TextButton") and (
-                string.find(name, "sell") or
-                string.find(obj.Text and string.lower(obj.Text) or "", "sell")
-            ) then
-                pcall(function()
-                    obj.MouseButton1Click:Fire()
-                end)
-                task.wait(S.SellDelay)
-            end
+    -- Coba remote sell
+    local remoteNames = {"Sell","SellFish","SellAll","SellItem","sell","Jual"}
+    for _, name in pairs(remoteNames) do
+        local r = game:GetService("ReplicatedStorage"):FindFirstChild(name, true)
+        if r then
+            pcall(function()
+                if r:IsA("RemoteEvent") then r:FireServer()
+                elseif r:IsA("RemoteFunction") then r:InvokeServer() end
+            end)
+            task.wait(0.2)
         end
     end
 end
 
--- ── MAIN AUTO FISH LOOP ──
-local fishLoop = false
+-- ─────────────────────────────────
+--   MAIN AUTO FISH LOOP
+-- ─────────────────────────────────
+local fishLoop  = false
 local fishStats = {casts = 0, catches = 0, sold = 0}
 
 local function StartAutoFish()
@@ -196,58 +176,84 @@ local function StartAutoFish()
     task.spawn(function()
         while fishLoop and S.AutoFish do
             local ok, err = pcall(function()
+                task.wait(0.2) -- safety guard
 
-                task.wait(0.15) -- guard minimum agar tidak crash
-
-                -- Step 1: Pastikan rod equipped
+                -- Pastikan rod di tangan
                 local tool = getFishingTool()
-                if tool and not Char:FindFirstChild(tool.Name) then
+                if not tool then
+                    task.wait(1)
+                    return
+                end
+                if not Char:FindFirstChild(tool.Name) then
                     equipTool(tool)
                     task.wait(0.5)
                 end
 
-                -- Step 2: Cast
+                -- Cast: klik mouse untuk lempar
                 if S.AutoCast and fishLoop then
                     clickMouse()
                     fishStats.casts += 1
-                    task.wait(math.max(S.CastDelay, 0.1))
+                    task.wait(math.max(S.CastDelay, 0.2))
                 end
 
-                -- Step 3: Tunggu minigame muncul (max 15 detik)
+                -- Tunggu minigame muncul (max 20 detik)
                 local waited = 0
-                while fishLoop and waited < 15 and not isFishingActive() do
-                    task.wait(0.25)
-                    waited += 0.25
+                while fishLoop and waited < 20 do
+                    local active, phase = isFishingActive()
+                    if active then break end
+                    task.wait(0.3)
+                    waited += 0.3
                 end
 
-                -- Step 4: Reel / shake
-                if fishLoop and isFishingActive() then
-                    local reelTime = 0
-                    while fishLoop and isFishingActive() and reelTime < 20 do
-                        if S.AutoReel or S.AutoShake then
+                -- Handle minigame Fishzar
+                local reelTime = 0
+                while fishLoop and reelTime < 25 do
+                    local active, phase = isFishingActive()
+                    if not active then break end
+
+                    if S.AutoReel then
+                        local btnStart, btnYes, btnNo = getFishzarButtons()
+
+                        -- Phase "BtnStart" = ikan gigit, klik untuk mulai reel
+                        if phase == "start" and btnStart and btnStart.Visible then
+                            fireButton(btnStart)
+                            task.wait(0.1)
+
+                        -- Phase "BtnYes/BtnNo" = pilihan, klik Yes
+                        elseif phase == "yes" and btnYes and btnYes.Visible then
+                            fireButton(btnYes)
+                            task.wait(0.1)
+
+                        else
+                            -- Fallback: klik mouse biasa
                             clickMouse()
                         end
-                        local d = math.max(S.ReelDelay, 0.08)
-                        task.wait(d)
-                        reelTime += d
                     end
+
+                    local d = math.max(S.ReelDelay, 0.1)
+                    task.wait(d)
+                    reelTime += d
+                end
+
+                -- Cek apakah dapat ikan
+                local active, _ = isFishingActive()
+                if not active and reelTime > 0 then
                     fishStats.catches += 1
                 end
 
                 task.wait(0.5)
 
-                -- Step 5: Auto sell
+                -- Auto sell
                 if S.AutoSell and fishLoop then
                     tryAutoSell()
                     fishStats.sold += 1
-                    task.wait(math.max(S.SellDelay, 0.3))
+                    task.wait(math.max(S.SellDelay, 0.5))
                 end
 
                 task.wait(0.3)
             end)
 
             if not ok then
-                -- Error → tunggu sebelum retry
                 warn("[FishHub] Error: " .. tostring(err))
                 task.wait(2)
             end
@@ -258,6 +264,13 @@ end
 local function StopAutoFish()
     fishLoop = false
 end
+
+-- Respawn
+LP.CharacterAdded:Connect(function(c)
+    Char = c
+    Hum  = c:WaitForChild("Humanoid")
+    Root = c:WaitForChild("HumanoidRootPart")
+end)
 
 -- ─────────────────────────────────
 --   GUI
@@ -271,19 +284,16 @@ local COLOR = {
     Green  = Color3.fromRGB(70, 200, 130),
     Red    = Color3.fromRGB(220, 70, 70),
     Yellow = Color3.fromRGB(255, 200, 60),
-    Purple = Color3.fromRGB(150, 90, 255),
     Teal   = Color3.fromRGB(60, 210, 190),
     Text   = Color3.fromRGB(205, 208, 220),
     Muted  = Color3.fromRGB(90, 95, 115),
     White  = Color3.fromRGB(255, 255, 255),
 }
 
-local function tw(o, p, t)
-    TweenService:Create(o, TweenInfo.new(t or 0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), p):Play()
-end
-local function corner(p, r) local c = Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 6) end
-local function stroke(p,col,th) local s=Instance.new("UIStroke",p); s.Color=col or COLOR.Border; s.Thickness=th or 1; s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border end
-local function pad(p,t,b,l,r) local u=Instance.new("UIPadding",p); u.PaddingTop=UDim.new(0,t or 0); u.PaddingBottom=UDim.new(0,b or 0); u.PaddingLeft=UDim.new(0,l or 0); u.PaddingRight=UDim.new(0,r or 0) end
+local function tw(o,p,t) TweenService:Create(o,TweenInfo.new(t or 0.18,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),p):Play() end
+local function corner(p,r) local c=Instance.new("UICorner",p);c.CornerRadius=UDim.new(0,r or 6) end
+local function stroke(p,col,th) local s=Instance.new("UIStroke",p);s.Color=col or COLOR.Border;s.Thickness=th or 1;s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border end
+local function pad(p,t,b,l,r) local u=Instance.new("UIPadding",p);u.PaddingTop=UDim.new(0,t or 0);u.PaddingBottom=UDim.new(0,b or 0);u.PaddingLeft=UDim.new(0,l or 0);u.PaddingRight=UDim.new(0,r or 0) end
 
 -- ScreenGui
 local SG = Instance.new("ScreenGui")
@@ -291,14 +301,14 @@ SG.Name = "FishHub"
 SG.ResetOnSpawn = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
-if syn and syn.protect_gui then syn.protect_gui(SG); SG.Parent=game:GetService("CoreGui")
+if syn and syn.protect_gui then syn.protect_gui(SG);SG.Parent=game:GetService("CoreGui")
 elseif gethui then SG.Parent=gethui()
 else SG.Parent=LP:WaitForChild("PlayerGui") end
 
 -- Pill
 local Pill = Instance.new("TextButton")
-Pill.Size = UDim2.new(0,100,0,30)
-Pill.Position = UDim2.new(0.5,-50,0,14)
+Pill.Size = UDim2.new(0,105,0,30)
+Pill.Position = UDim2.new(0.5,-52,0,14)
 Pill.BackgroundColor3 = COLOR.Panel
 Pill.BorderSizePixel = 0
 Pill.Text = "🎣  Fish Hub"
@@ -312,7 +322,7 @@ stroke(Pill,COLOR.Accent,1)
 
 -- Window
 local Win = Instance.new("Frame")
-Win.Size = UDim2.new(0,300,0,530)
+Win.Size = UDim2.new(0,300,0,480)
 Win.Position = UDim2.new(0.5,-150,0,52)
 Win.BackgroundColor3 = COLOR.BG
 Win.BorderSizePixel = 0
@@ -330,50 +340,44 @@ Header.BackgroundColor3 = COLOR.Panel
 Header.BorderSizePixel = 0
 Header.ZIndex = 6
 Header.Parent = Win
-
-local HBorder = Instance.new("Frame")
+local HBorder = Instance.new("Frame",Header)
 HBorder.Size = UDim2.new(1,0,0,1)
 HBorder.Position = UDim2.new(0,0,1,-1)
 HBorder.BackgroundColor3 = COLOR.Border
 HBorder.BorderSizePixel = 0
-HBorder.Parent = Header
 
--- Icon
-local HIco = Instance.new("TextLabel")
+local HIco = Instance.new("TextLabel",Header)
 HIco.Size = UDim2.new(0,28,1,0)
 HIco.Position = UDim2.new(0,10,0,0)
 HIco.BackgroundTransparency = 1
 HIco.Text = "🎣"
 HIco.TextScaled = true
 HIco.ZIndex = 7
-HIco.Parent = Header
-pad(HIco,8,8,0,0)
+pad(HIco,9,9,0,0)
 
-local HTitle = Instance.new("TextLabel")
+local HTitle = Instance.new("TextLabel",Header)
 HTitle.Size = UDim2.new(1,-80,0,16)
 HTitle.Position = UDim2.new(0,42,0,8)
 HTitle.BackgroundTransparency = 1
-HTitle.Text = "Fish Hub"
-HTitle.TextSize = 13
+HTitle.Text = "Fish Hub  ·  Fishzar Edition"
+HTitle.TextSize = 12
 HTitle.Font = Enum.Font.GothamBold
 HTitle.TextColor3 = COLOR.Text
 HTitle.TextXAlignment = Enum.TextXAlignment.Left
 HTitle.ZIndex = 7
-HTitle.Parent = Header
 
-local HSub = Instance.new("TextLabel")
+local HSub = Instance.new("TextLabel",Header)
 HSub.Size = UDim2.new(1,-80,0,12)
-HSub.Position = UDim2.new(0,42,0,24)
+HSub.Position = UDim2.new(0,42,0,25)
 HSub.BackgroundTransparency = 1
-HSub.Text = "Fish It! · Auto Fisher"
-HSub.TextSize = 10
+HSub.Text = "v2 · Fixed for Fishzar"
+HSub.TextSize = 9
 HSub.Font = Enum.Font.Gotham
 HSub.TextColor3 = COLOR.Muted
 HSub.TextXAlignment = Enum.TextXAlignment.Left
 HSub.ZIndex = 7
-HSub.Parent = Header
 
-local HClose = Instance.new("TextButton")
+local HClose = Instance.new("TextButton",Header)
 HClose.Size = UDim2.new(0,24,0,24)
 HClose.Position = UDim2.new(1,-32,0.5,-12)
 HClose.BackgroundColor3 = COLOR.Item
@@ -383,7 +387,6 @@ HClose.Font = Enum.Font.GothamBold
 HClose.TextColor3 = COLOR.Muted
 HClose.BorderSizePixel = 0
 HClose.ZIndex = 7
-HClose.Parent = Header
 corner(HClose,5)
 HClose.MouseEnter:Connect(function() tw(HClose,{BackgroundColor3=COLOR.Red,TextColor3=COLOR.White}) end)
 HClose.MouseLeave:Connect(function() tw(HClose,{BackgroundColor3=COLOR.Item,TextColor3=COLOR.Muted}) end)
@@ -407,87 +410,65 @@ LL.Padding = UDim.new(0,4)
 pad(Scroll,8,12,8,8)
 
 local ord = 0
-local function O() ord+=1; return ord end
+local function O() ord+=1;return ord end
 
--- ── Component Builders ──
 local function Section(name)
-    local f=Instance.new("Frame"); f.Size=UDim2.new(1,0,0,18); f.BackgroundTransparency=1; f.LayoutOrder=O(); f.Parent=Scroll
-    local l=Instance.new("TextLabel",f); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
-    l.Text=string.upper(name); l.TextSize=9; l.Font=Enum.Font.GothamBold; l.TextColor3=COLOR.Muted
-    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=7; pad(l,0,0,4,0)
+    local f=Instance.new("Frame");f.Size=UDim2.new(1,0,0,18);f.BackgroundTransparency=1;f.LayoutOrder=O();f.Parent=Scroll
+    local l=Instance.new("TextLabel",f);l.Size=UDim2.new(1,0,1,0);l.BackgroundTransparency=1
+    l.Text=string.upper(name);l.TextSize=9;l.Font=Enum.Font.GothamBold;l.TextColor3=COLOR.Muted
+    l.TextXAlignment=Enum.TextXAlignment.Left;l.ZIndex=7;pad(l,0,0,4,0)
 end
 
 local function Gap(h)
-    local f=Instance.new("Frame"); f.Size=UDim2.new(1,0,0,h or 3); f.BackgroundTransparency=1; f.LayoutOrder=O(); f.Parent=Scroll
+    local f=Instance.new("Frame");f.Size=UDim2.new(1,0,0,h or 3);f.BackgroundTransparency=1;f.LayoutOrder=O();f.Parent=Scroll
 end
 
 local function Toggle(label, key, accentCol, cb)
-    local Row=Instance.new("Frame"); Row.Size=UDim2.new(1,0,0,38); Row.BackgroundColor3=COLOR.Item
-    Row.BorderSizePixel=0; Row.LayoutOrder=O(); Row.ZIndex=7; Row.Parent=Scroll
-    corner(Row,7); stroke(Row,COLOR.Border)
-
-    local Lbl=Instance.new("TextLabel",Row); Lbl.Size=UDim2.new(1,-58,1,0); Lbl.Position=UDim2.new(0,12,0,0)
-    Lbl.BackgroundTransparency=1; Lbl.Text=label; Lbl.TextSize=12; Lbl.Font=Enum.Font.Gotham
-    Lbl.TextColor3=COLOR.Text; Lbl.TextXAlignment=Enum.TextXAlignment.Left; Lbl.ZIndex=8
-
-    local Track=Instance.new("Frame",Row); Track.Size=UDim2.new(0,34,0,17); Track.Position=UDim2.new(1,-44,0.5,-8)
-    Track.BorderSizePixel=0; Track.ZIndex=8; corner(Track,9)
-
-    local Knob=Instance.new("Frame",Track); Knob.Size=UDim2.new(0,11,0,11); Knob.BackgroundColor3=COLOR.White
-    Knob.BorderSizePixel=0; Knob.ZIndex=9; corner(Knob,6)
-
-    local ac = accentCol or COLOR.Green
+    local Row=Instance.new("Frame");Row.Size=UDim2.new(1,0,0,38);Row.BackgroundColor3=COLOR.Item
+    Row.BorderSizePixel=0;Row.LayoutOrder=O();Row.ZIndex=7;Row.Parent=Scroll
+    corner(Row,7);stroke(Row,COLOR.Border)
+    local Lbl=Instance.new("TextLabel",Row);Lbl.Size=UDim2.new(1,-58,1,0);Lbl.Position=UDim2.new(0,12,0,0)
+    Lbl.BackgroundTransparency=1;Lbl.Text=label;Lbl.TextSize=12;Lbl.Font=Enum.Font.Gotham
+    Lbl.TextColor3=COLOR.Text;Lbl.TextXAlignment=Enum.TextXAlignment.Left;Lbl.ZIndex=8
+    local Track=Instance.new("Frame",Row);Track.Size=UDim2.new(0,34,0,17);Track.Position=UDim2.new(1,-44,0.5,-8)
+    Track.BorderSizePixel=0;Track.ZIndex=8;corner(Track,9)
+    local Knob=Instance.new("Frame",Track);Knob.Size=UDim2.new(0,11,0,11);Knob.BackgroundColor3=COLOR.White
+    Knob.BorderSizePixel=0;Knob.ZIndex=9;corner(Knob,6)
+    local ac=accentCol or COLOR.Green
     local function Refresh()
-        if S[key] then
-            tw(Track,{BackgroundColor3=ac}); tw(Knob,{Position=UDim2.new(0,20,0.5,-5)})
-            tw(Lbl,{TextColor3=COLOR.White})
-        else
-            tw(Track,{BackgroundColor3=COLOR.Border}); tw(Knob,{Position=UDim2.new(0,3,0.5,-5)})
-            tw(Lbl,{TextColor3=COLOR.Text})
-        end
+        if S[key] then tw(Track,{BackgroundColor3=ac});tw(Knob,{Position=UDim2.new(0,20,0.5,-5)});tw(Lbl,{TextColor3=COLOR.White})
+        else tw(Track,{BackgroundColor3=COLOR.Border});tw(Knob,{Position=UDim2.new(0,3,0.5,-5)});tw(Lbl,{TextColor3=COLOR.Text}) end
     end
     Refresh()
-
-    local Btn=Instance.new("TextButton",Row); Btn.Size=UDim2.new(1,0,1,0); Btn.BackgroundTransparency=1
-    Btn.Text=""; Btn.ZIndex=10
+    local Btn=Instance.new("TextButton",Row);Btn.Size=UDim2.new(1,0,1,0);Btn.BackgroundTransparency=1;Btn.Text="";Btn.ZIndex=10
     Btn.MouseEnter:Connect(function() tw(Row,{BackgroundColor3=Color3.fromRGB(30,32,42)}) end)
     Btn.MouseLeave:Connect(function() tw(Row,{BackgroundColor3=COLOR.Item}) end)
-    Btn.MouseButton1Click:Connect(function()
-        S[key]=not S[key]; Refresh()
-        if cb then cb(S[key]) end
-    end)
+    Btn.MouseButton1Click:Connect(function() S[key]=not S[key];Refresh();if cb then cb(S[key]) end end)
     return Refresh
 end
 
 local function Slider(label, key, minV, maxV, dec, suffix)
-    dec = dec or 1; suffix = suffix or ""
-    local Row=Instance.new("Frame"); Row.Size=UDim2.new(1,0,0,50); Row.BackgroundColor3=COLOR.Item
-    Row.BorderSizePixel=0; Row.LayoutOrder=O(); Row.ZIndex=7; Row.Parent=Scroll
-    corner(Row,7); stroke(Row,COLOR.Border)
-
-    local Lbl=Instance.new("TextLabel",Row); Lbl.Size=UDim2.new(0.6,0,0,18); Lbl.Position=UDim2.new(0,12,0,6)
-    Lbl.BackgroundTransparency=1; Lbl.Text=label; Lbl.TextSize=11; Lbl.Font=Enum.Font.Gotham
-    Lbl.TextColor3=COLOR.Text; Lbl.TextXAlignment=Enum.TextXAlignment.Left; Lbl.ZIndex=8
-
-    local Val=Instance.new("TextLabel",Row); Val.Size=UDim2.new(0.35,0,0,18); Val.Position=UDim2.new(0.63,0,0,6)
-    Val.BackgroundTransparency=1; Val.TextSize=11; Val.Font=Enum.Font.GothamBold
-    Val.TextColor3=COLOR.Accent; Val.TextXAlignment=Enum.TextXAlignment.Right; Val.ZIndex=8
-
-    local TBG=Instance.new("Frame",Row); TBG.Size=UDim2.new(1,-24,0,4); TBG.Position=UDim2.new(0,12,0,34)
-    TBG.BackgroundColor3=COLOR.Border; TBG.BorderSizePixel=0; TBG.ZIndex=8; corner(TBG,2)
-
-    local Fill=Instance.new("Frame",TBG); Fill.BackgroundColor3=COLOR.Accent; Fill.BorderSizePixel=0; Fill.ZIndex=9; corner(Fill,2)
-    local Knob=Instance.new("Frame",TBG); Knob.Size=UDim2.new(0,12,0,12); Knob.BackgroundColor3=COLOR.White
-    Knob.BorderSizePixel=0; Knob.ZIndex=10; corner(Knob,6)
-
+    dec=dec or 2;suffix=suffix or ""
+    local Row=Instance.new("Frame");Row.Size=UDim2.new(1,0,0,50);Row.BackgroundColor3=COLOR.Item
+    Row.BorderSizePixel=0;Row.LayoutOrder=O();Row.ZIndex=7;Row.Parent=Scroll
+    corner(Row,7);stroke(Row,COLOR.Border)
+    local Lbl=Instance.new("TextLabel",Row);Lbl.Size=UDim2.new(0.6,0,0,18);Lbl.Position=UDim2.new(0,12,0,6)
+    Lbl.BackgroundTransparency=1;Lbl.Text=label;Lbl.TextSize=11;Lbl.Font=Enum.Font.Gotham
+    Lbl.TextColor3=COLOR.Text;Lbl.TextXAlignment=Enum.TextXAlignment.Left;Lbl.ZIndex=8
+    local Val=Instance.new("TextLabel",Row);Val.Size=UDim2.new(0.35,0,0,18);Val.Position=UDim2.new(0.63,0,0,6)
+    Val.BackgroundTransparency=1;Val.TextSize=11;Val.Font=Enum.Font.GothamBold
+    Val.TextColor3=COLOR.Accent;Val.TextXAlignment=Enum.TextXAlignment.Right;Val.ZIndex=8
+    local TBG=Instance.new("Frame",Row);TBG.Size=UDim2.new(1,-24,0,4);TBG.Position=UDim2.new(0,12,0,34)
+    TBG.BackgroundColor3=COLOR.Border;TBG.BorderSizePixel=0;TBG.ZIndex=8;corner(TBG,2)
+    local Fill=Instance.new("Frame",TBG);Fill.BackgroundColor3=COLOR.Accent;Fill.BorderSizePixel=0;Fill.ZIndex=9;corner(Fill,2)
+    local Knob=Instance.new("Frame",TBG);Knob.Size=UDim2.new(0,12,0,12);Knob.BackgroundColor3=COLOR.White
+    Knob.BorderSizePixel=0;Knob.ZIndex=10;corner(Knob,6)
     local function Update(v)
-        local m=10^dec; v=math.clamp(math.round(v*m)/m,minV,maxV)
-        S[key]=v; Val.Text=tostring(v)..suffix
-        local pct=(v-minV)/(maxV-minV)
-        Fill.Size=UDim2.new(pct,0,1,0); Knob.Position=UDim2.new(pct,-6,0.5,-6)
+        local m=10^dec;v=math.clamp(math.round(v*m)/m,minV,maxV)
+        S[key]=v;Val.Text=tostring(v)..suffix
+        local pct=(v-minV)/(maxV-minV);Fill.Size=UDim2.new(pct,0,1,0);Knob.Position=UDim2.new(pct,-6,0.5,-6)
     end
     Update(S[key])
-
     local drag=false
     Knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
     UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
@@ -506,139 +487,146 @@ local function Slider(label, key, minV, maxV, dec, suffix)
 end
 
 -- ── Stats Card ──
-local StatsCard = Instance.new("Frame")
-StatsCard.Size = UDim2.new(1,0,0,52)
-StatsCard.BackgroundColor3 = COLOR.Panel
-StatsCard.BorderSizePixel = 0
-StatsCard.LayoutOrder = O()
-StatsCard.ZIndex = 7
-StatsCard.Parent = Scroll
+local StatsCard=Instance.new("Frame")
+StatsCard.Size=UDim2.new(1,0,0,52)
+StatsCard.BackgroundColor3=COLOR.Panel
+StatsCard.BorderSizePixel=0
+StatsCard.LayoutOrder=O()
+StatsCard.ZIndex=7
+StatsCard.Parent=Scroll
 corner(StatsCard,8)
 stroke(StatsCard,COLOR.Accent,1)
 
-local function StatItem(label, idx, total)
-    local col = Instance.new("Frame",StatsCard)
-    col.Size = UDim2.new(1/total,0,1,0)
-    col.Position = UDim2.new((idx-1)/total,0,0,0)
-    col.BackgroundTransparency = 1
-    col.ZIndex = 8
-
-    local vl = Instance.new("TextLabel",col)
-    vl.Size = UDim2.new(1,0,0,24)
-    vl.Position = UDim2.new(0,0,0,6)
-    vl.BackgroundTransparency = 1
-    vl.TextSize = 16
-    vl.Font = Enum.Font.GothamBold
-    vl.TextColor3 = COLOR.Accent
-    vl.ZIndex = 9
-
-    local ll = Instance.new("TextLabel",col)
-    ll.Size = UDim2.new(1,0,0,14)
-    ll.Position = UDim2.new(0,0,0,30)
-    ll.BackgroundTransparency = 1
-    ll.Text = label
-    ll.TextSize = 9
-    ll.Font = Enum.Font.Gotham
-    ll.TextColor3 = COLOR.Muted
-    ll.ZIndex = 9
-
+local function StatCol(label, idx, total)
+    local col=Instance.new("Frame",StatsCard);col.Size=UDim2.new(1/total,0,1,0)
+    col.Position=UDim2.new((idx-1)/total,0,0,0);col.BackgroundTransparency=1;col.ZIndex=8
+    local vl=Instance.new("TextLabel",col);vl.Size=UDim2.new(1,0,0,26);vl.Position=UDim2.new(0,0,0,4)
+    vl.BackgroundTransparency=1;vl.Text="0";vl.TextSize=18;vl.Font=Enum.Font.GothamBold
+    vl.TextColor3=COLOR.Accent;vl.ZIndex=9
+    local ll=Instance.new("TextLabel",col);ll.Size=UDim2.new(1,0,0,14);ll.Position=UDim2.new(0,0,0,32)
+    ll.BackgroundTransparency=1;ll.Text=label;ll.TextSize=9;ll.Font=Enum.Font.Gotham
+    ll.TextColor3=COLOR.Muted;ll.ZIndex=9
     return vl
 end
 
-local CastLbl   = StatItem("CAST",   1, 3)
-local CatchLbl  = StatItem("TANGKAP", 2, 3)
-local SellLbl   = StatItem("DIJUAL",  3, 3)
+local CastLbl  = StatCol("CAST",   1, 3)
+local CatchLbl = StatCol("TANGKAP",2, 3)
+local SellLbl  = StatCol("DIJUAL", 3, 3)
 
--- Update stats tiap detik
 task.spawn(function()
     while task.wait(1) do
-        CastLbl.Text  = tostring(fishStats.casts)
-        CatchLbl.Text = tostring(fishStats.catches)
-        SellLbl.Text  = tostring(fishStats.sold)
+        CastLbl.Text=tostring(fishStats.casts)
+        CatchLbl.Text=tostring(fishStats.catches)
+        SellLbl.Text=tostring(fishStats.sold)
     end
 end)
 
 Gap()
 
--- ── AUTO FISH MASTER TOGGLE ──
-local masterRefresh
+-- ── Status indicator ──
+local StatusLbl = Instance.new("TextLabel")
+StatusLbl.Size = UDim2.new(1,0,0,26)
+StatusLbl.BackgroundColor3 = Color3.fromRGB(20,22,16)
+StatusLbl.BorderSizePixel = 0
+StatusLbl.Text = "⬤  Idle"
+StatusLbl.TextSize = 11
+StatusLbl.Font = Enum.Font.GothamBold
+StatusLbl.TextColor3 = COLOR.Muted
+StatusLbl.LayoutOrder = O()
+StatusLbl.ZIndex = 7
+StatusLbl.Parent = Scroll
+corner(StatusLbl,6)
+stroke(StatusLbl,COLOR.Border)
+
+-- Update status realtime
+task.spawn(function()
+    while task.wait(0.5) do
+        if S.AutoFish and fishLoop then
+            local active, phase = isFishingActive()
+            if active then
+                if phase == "start" then
+                    StatusLbl.Text = "🐟  Ikan gigit! Klik..."
+                    StatusLbl.TextColor3 = COLOR.Yellow
+                else
+                    StatusLbl.Text = "🎣  Reeling..."
+                    StatusLbl.TextColor3 = COLOR.Green
+                end
+            else
+                StatusLbl.Text = "⬤  Menunggu ikan..."
+                StatusLbl.TextColor3 = COLOR.Accent
+            end
+        else
+            StatusLbl.Text = "⬤  Idle"
+            StatusLbl.TextColor3 = COLOR.Muted
+        end
+    end
+end)
+
+Gap()
 Section("AUTO FISHING")
 
--- Master toggle dengan warna khusus + start/stop loop
-masterRefresh = Toggle("Auto Fish (Master)", "AutoFish", COLOR.Teal, function(v)
+Toggle("Auto Fish (Master)", "AutoFish", COLOR.Teal, function(v)
     if v then
         StartAutoFish()
+        tw(Pill,{BackgroundColor3=COLOR.Teal,TextColor3=COLOR.White})
         Pill.Text = "🎣  FISHING..."
-        tw(Pill, {BackgroundColor3=COLOR.Teal, TextColor3=COLOR.White})
     else
         StopAutoFish()
+        tw(Pill,{BackgroundColor3=COLOR.Panel,TextColor3=COLOR.Accent})
         Pill.Text = "🎣  Fish Hub"
-        tw(Pill, {BackgroundColor3=COLOR.Panel, TextColor3=COLOR.Accent})
     end
 end)
 
 Toggle("Auto Cast",  "AutoCast",  COLOR.Green)
 Toggle("Auto Reel",  "AutoReel",  COLOR.Green)
-Toggle("Auto Shake", "AutoShake", COLOR.Yellow)
-Toggle("Auto Sell",  "AutoSell",  COLOR.Purple)
+Toggle("Auto Sell",  "AutoSell",  COLOR.Yellow)
 
 Gap()
 Section("DELAY SETTINGS")
-Slider("Cast Delay",  "CastDelay",  0.0, 3.0, 2, "s")
-Slider("Reel Delay",  "ReelDelay",  0.0, 1.0, 2, "s")
-Slider("Shake Delay", "ShakeDelay", 0.0, 1.0, 2, "s")
-Slider("Sell Delay",  "SellDelay",  0.1, 3.0, 1, "s")
+Slider("Cast Delay",  "CastDelay", 0.2, 5.0, 1, "s")
+Slider("Reel Delay",  "ReelDelay", 0.1, 2.0, 2, "s")
+Slider("Sell Delay",  "SellDelay", 0.3, 5.0, 1, "s")
 
 Gap()
 Section("AKSI")
 
--- Reset Stats
-local RBtn = Instance.new("TextButton")
-RBtn.Size = UDim2.new(1,0,0,34)
-RBtn.BackgroundColor3 = COLOR.Item
-RBtn.BorderSizePixel = 0
-RBtn.Text = "Reset Statistik"
-RBtn.TextSize = 11
-RBtn.Font = Enum.Font.GothamBold
-RBtn.TextColor3 = COLOR.Text
-RBtn.LayoutOrder = O()
-RBtn.ZIndex = 7
-RBtn.Parent = Scroll
-corner(RBtn,7)
-stroke(RBtn,COLOR.Border)
+local RBtn=Instance.new("TextButton")
+RBtn.Size=UDim2.new(1,0,0,34);RBtn.BackgroundColor3=COLOR.Item;RBtn.BorderSizePixel=0
+RBtn.Text="Reset Statistik";RBtn.TextSize=11;RBtn.Font=Enum.Font.GothamBold
+RBtn.TextColor3=COLOR.Text;RBtn.LayoutOrder=O();RBtn.ZIndex=7;RBtn.Parent=Scroll
+corner(RBtn,7);stroke(RBtn,COLOR.Border)
 RBtn.MouseEnter:Connect(function() tw(RBtn,{BackgroundColor3=COLOR.Accent,TextColor3=COLOR.White}) end)
 RBtn.MouseLeave:Connect(function() tw(RBtn,{BackgroundColor3=COLOR.Item,TextColor3=COLOR.Text}) end)
 RBtn.MouseButton1Click:Connect(function()
-    fishStats.casts=0; fishStats.catches=0; fishStats.sold=0
-    CastLbl.Text="0"; CatchLbl.Text="0"; SellLbl.Text="0"
+    fishStats.casts=0;fishStats.catches=0;fishStats.sold=0
+    CastLbl.Text="0";CatchLbl.Text="0";SellLbl.Text="0"
 end)
 
-Gap(4)
+Gap()
 
--- ── Info box ──
-local InfoBox = Instance.new("TextLabel")
-InfoBox.Size = UDim2.new(1,0,0,40)
-InfoBox.BackgroundColor3 = Color3.fromRGB(20,22,16)
-InfoBox.BorderSizePixel = 0
-InfoBox.Text = "⚠  Delay 0 = blatant. Atur delay\nagar lebih natural & aman."
-InfoBox.TextSize = 10
-InfoBox.Font = Enum.Font.Gotham
-InfoBox.TextColor3 = Color3.fromRGB(200,180,80)
-InfoBox.TextWrapped = true
-InfoBox.LayoutOrder = O()
-InfoBox.ZIndex = 7
-InfoBox.Parent = Scroll
+local InfoBox=Instance.new("TextLabel")
+InfoBox.Size=UDim2.new(1,0,0,36)
+InfoBox.BackgroundColor3=Color3.fromRGB(18,20,16)
+InfoBox.BorderSizePixel=0
+InfoBox.Text="ℹ  Aktifkan semua toggle lalu Master.\nFitur disesuaikan untuk Fishzar."
+InfoBox.TextSize=10
+InfoBox.Font=Enum.Font.Gotham
+InfoBox.TextColor3=COLOR.Muted
+InfoBox.TextWrapped=true
+InfoBox.LayoutOrder=O()
+InfoBox.ZIndex=7
+InfoBox.Parent=Scroll
 corner(InfoBox,6)
-stroke(InfoBox,Color3.fromRGB(70,60,20))
+stroke(InfoBox,COLOR.Border)
 
 Gap(4)
 
 -- ── Open/Close ──
-local isOpen = false
+local isOpen=false
 local function Open()
-    isOpen=true; Win.Visible=true
+    isOpen=true;Win.Visible=true
     Win.Size=UDim2.new(0,300,0,0)
-    tw(Win,{Size=UDim2.new(0,300,0,530)},0.22)
+    tw(Win,{Size=UDim2.new(0,300,0,480)},0.22)
     if not S.AutoFish then tw(Pill,{BackgroundColor3=COLOR.Accent,TextColor3=COLOR.White}) end
 end
 local function Close()
@@ -661,8 +649,7 @@ Header.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Mou
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then da=false end end)
 UserInputService.InputChanged:Connect(function(i)
     if da and i.UserInputType==Enum.UserInputType.MouseMovement then
-        local d=i.Position-ds
-        Win.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
+        local d=i.Position-ds;Win.Position=UDim2.new(sp.X.Scale,sp.X.Offset+d.X,sp.Y.Scale,sp.Y.Offset+d.Y)
     end
 end)
 
@@ -672,9 +659,8 @@ Pill.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.Mouse
 UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then pd=false end end)
 UserInputService.InputChanged:Connect(function(i)
     if pd and i.UserInputType==Enum.UserInputType.MouseMovement then
-        local d=i.Position-ps
-        Pill.Position=UDim2.new(pp.X.Scale,pp.X.Offset+d.X,pp.Y.Scale,pp.Y.Offset+d.Y)
+        local d=i.Position-ps;Pill.Position=UDim2.new(pp.X.Scale,pp.X.Offset+d.X,pp.Y.Scale,pp.Y.Offset+d.Y)
     end
 end)
 
-print("[Fish Hub] Loaded! RightShift = buka menu")
+print("[FishHub v2 Fishzar] Loaded! RightShift = buka menu")
