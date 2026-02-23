@@ -1,179 +1,98 @@
 --[[
-╔═══════════════════════════════════════════════════════════╗
-║            🌊 WIND HUB — Universal Script                 ║
-║         Anti Jatuh · Mountain Walker · Double Jump        ║
-║                  WindUI Style · All Games                 ║
-╚═══════════════════════════════════════════════════════════╝
+    Wind Hub v3
+    Universal · All Games
+    Tekan [RightShift] untuk buka/tutup menu
+]]
 
-  FITUR LENGKAP:
-  ├─ 🛡️  Anti Jatuh / Anti Fall Damage
-  ├─ 🏔️  Anti Slip (Tangga & Gunung)
-  ├─ ⚖️  Auto Stabilize di Lereng
-  ├─ 🦘  Double Jump
-  ├─ ♾️  Infinite Jump
-  ├─ 👻  No Clip
-  ├─ 🏃  Walk Speed Slider
-  ├─ ⬆️  Jump Power Slider
-  ├─ 🌍  Gravity Slider
-  ├─ 🧲  Friction Multiplier
-  ├─ 🚀  Speed Boost (Sprint)
-  └─ 🔄  Reset Default
+-- Services
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
 
-  CARA PAKAI:
-  → Paste di executor lalu Execute
-  → Tekan [K] atau klik icon untuk buka/tutup menu
---]]
-
--- ─────────────────────────────────────────
---            SERVICES
--- ─────────────────────────────────────────
-local Players           = game:GetService("Players")
-local RunService        = game:GetService("RunService")
-local UserInputService  = game:GetService("UserInputService")
-local TweenService      = game:GetService("TweenService")
-local TextService       = game:GetService("TextService")
-
-local LP       = Players.LocalPlayer
-local Camera   = workspace.CurrentCamera
-
+local LP = Players.LocalPlayer
 repeat task.wait() until LP.Character
-local Char       = LP.Character
-local Hum        = Char:WaitForChild("Humanoid")
-local Root       = Char:WaitForChild("HumanoidRootPart")
+local Char = LP.Character
+local Hum  = Char:WaitForChild("Humanoid")
+local Root = Char:WaitForChild("HumanoidRootPart")
 
--- ─────────────────────────────────────────
---            SETTINGS
--- ─────────────────────────────────────────
+-- ─────────────────────────────────
+--   SETTINGS  (semua OFF by default)
+-- ─────────────────────────────────
 local S = {
-    -- Toggles
-    AntiJatuh       = true,
-    AntiSlip        = true,
-    AutoStabilize   = true,
-    DoubleJump      = true,
-    InfiniteJump    = false,
-    NoClip          = false,
-    SpeedBoost      = false,
+    -- Semua fitur OFF by default agar tidak ganggu gameplay
+    AntiJatuh     = false,
+    AntiSlip      = false,
+    AutoStabilize = false,
+    DoubleJump    = false,
+    InfiniteJump  = false,
+    NoClip        = false,
+    SpeedBoost    = false,
+    LowGrav       = false,
+    AntiRagdoll   = false,
+    AutoJump      = false,
 
-    -- Sliders
-    WalkSpeed       = 16,
-    JumpPower       = 50,
-    Gravity         = 196.2,
-    FrictionMult    = 3.5,
-    BoostSpeed      = 32,
+    WalkSpeed    = 16,
+    JumpPower    = 50,
+    Gravity      = 196.2,
+    FrictionMult = 3.5,
+    BoostSpeed   = 40,
 }
 
--- ─────────────────────────────────────────
---            DOUBLE JUMP LOGIC
--- ─────────────────────────────────────────
-local canDoubleJump  = false
-local hasDoubleJumped = false
-local jumpConn, djConn
-
-local function SetupDoubleJump()
-    if djConn then djConn:Disconnect(); djConn = nil end
-
-    if S.DoubleJump then
-        -- Deteksi saat landed untuk reset
-        djConn = Hum.StateChanged:Connect(function(old, new)
-            if new == Enum.HumanoidStateType.Landed or
-               new == Enum.HumanoidStateType.Running then
-                canDoubleJump    = true
-                hasDoubleJumped  = false
-            elseif new == Enum.HumanoidStateType.Freefall then
-                task.delay(0.15, function()
-                    canDoubleJump = true
-                end)
-            end
-        end)
-    end
-end
-
--- Input untuk double jump & infinite jump
-UserInputService.JumpRequest:Connect(function()
-    if not Char or not Hum then return end
-
-    if S.InfiniteJump then
-        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
-        return
-    end
-
-    if S.DoubleJump and canDoubleJump and not hasDoubleJumped
-       and Hum:GetState() == Enum.HumanoidStateType.Freefall then
-        hasDoubleJumped = true
-        canDoubleJump   = false
-        -- Lompatan kedua
-        Root.Velocity = Vector3.new(
-            Root.Velocity.X,
-            S.JumpPower * 0.85,
-            Root.Velocity.Z
-        )
-        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- ─────────────────────────────────────────
---            PHYSICS CORE
--- ─────────────────────────────────────────
+-- ─────────────────────────────────
+--   PHYSICS
+-- ─────────────────────────────────
 local function ApplyPhysics()
-    if not Char or not Hum then return end
-    Hum.WalkSpeed  = S.WalkSpeed
-    Hum.JumpPower  = S.JumpPower
+    if not Hum then return end
+    Hum.WalkSpeed = S.WalkSpeed
+    Hum.JumpPower = S.JumpPower
     workspace.Gravity = S.Gravity
 
     for _, p in pairs(Char:GetDescendants()) do
         if p:IsA("BasePart") then
             local fr = S.AntiSlip and S.FrictionMult or 0.3
-            p.CustomPhysicalProperties = PhysicalProperties.new(0.7, fr, 0.0, S.AntiSlip and 1.0 or 0.0, 0.0)
+            local fw = S.AntiSlip and 1.0 or 0.0
+            p.CustomPhysicalProperties = PhysicalProperties.new(0.7, fr, 0.0, fw, 0.0)
         end
     end
 end
 
--- Anti Jatuh – cap fall speed
-RunService.Heartbeat:Connect(function()
-    if not Char or not Root or not Hum then return end
+-- ─────────────────────────────────
+--   DOUBLE JUMP
+-- ─────────────────────────────────
+local canDJ, hasDJ = false, false
+local djConn
 
-    -- Anti Jatuh
-    if S.AntiJatuh then
-        local vy = Root.Velocity.Y
-        if vy < -38 then
-            Root.Velocity = Vector3.new(Root.Velocity.X, -38, Root.Velocity.Z)
+local function SetupDoubleJump()
+    if djConn then djConn:Disconnect(); djConn = nil end
+    if not S.DoubleJump then return end
+
+    djConn = Hum.StateChanged:Connect(function(_, new)
+        if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+            canDJ = true; hasDJ = false
+        elseif new == Enum.HumanoidStateType.Freefall then
+            task.delay(0.12, function() canDJ = true end)
         end
-    end
+    end)
+end
 
-    -- Auto Stabilize (stop sliding on slope)
-    if S.AutoStabilize then
-        local isGround = Hum.FloorMaterial ~= Enum.Material.Air
-        local moving   = (UserInputService:IsKeyDown(Enum.KeyCode.W) or
-                          UserInputService:IsKeyDown(Enum.KeyCode.A) or
-                          UserInputService:IsKeyDown(Enum.KeyCode.S) or
-                          UserInputService:IsKeyDown(Enum.KeyCode.D))
-        if isGround and not moving then
-            local v = Root.Velocity
-            if v.Magnitude > 0.5 then
-                Root.Velocity = Vector3.new(v.X * 0.82, v.Y, v.Z * 0.82)
-            end
-        end
+UserInputService.JumpRequest:Connect(function()
+    if not Hum then return end
+    if S.InfiniteJump then
+        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        return
     end
-
-    -- Speed Boost (hold shift)
-    if S.SpeedBoost then
-        local shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-        Hum.WalkSpeed = shift and S.BoostSpeed or S.WalkSpeed
-    end
-
-    -- Sync speed/jump
-    if Hum.WalkSpeed ~= S.WalkSpeed and not S.SpeedBoost then
-        Hum.WalkSpeed = S.WalkSpeed
-    end
-    if Hum.JumpPower ~= S.JumpPower then
-        Hum.JumpPower = S.JumpPower
-    end
-    if workspace.Gravity ~= S.Gravity then
-        workspace.Gravity = S.Gravity
+    if S.DoubleJump and canDJ and not hasDJ
+       and Hum:GetState() == Enum.HumanoidStateType.Freefall then
+        hasDJ = true; canDJ = false
+        Root.Velocity = Vector3.new(Root.Velocity.X, S.JumpPower * 0.85, Root.Velocity.Z)
+        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
--- No Clip
+-- ─────────────────────────────────
+--   NO CLIP
+-- ─────────────────────────────────
 local ncConn
 local function SetupNoClip()
     if ncConn then ncConn:Disconnect(); ncConn = nil end
@@ -190,6 +109,74 @@ local function SetupNoClip()
     end
 end
 
+-- ─────────────────────────────────
+--   AUTO JUMP (mobile helper)
+-- ─────────────────────────────────
+local ajConn
+local function SetupAutoJump()
+    if ajConn then ajConn:Disconnect(); ajConn = nil end
+    if S.AutoJump then
+        Hum.AutoJumpEnabled = true
+    else
+        Hum.AutoJumpEnabled = false
+    end
+end
+
+-- ─────────────────────────────────
+--   HEARTBEAT LOOP
+-- ─────────────────────────────────
+RunService.Heartbeat:Connect(function()
+    if not Char or not Root or not Hum then return end
+
+    -- Anti Jatuh
+    if S.AntiJatuh and Root.Velocity.Y < -40 then
+        Root.Velocity = Vector3.new(Root.Velocity.X, -40, Root.Velocity.Z)
+    end
+
+    -- Auto Stabilize (stop slope sliding)
+    if S.AutoStabilize then
+        local onGround = Hum.FloorMaterial ~= Enum.Material.Air
+        local moving = UserInputService:IsKeyDown(Enum.KeyCode.W) or
+                       UserInputService:IsKeyDown(Enum.KeyCode.A) or
+                       UserInputService:IsKeyDown(Enum.KeyCode.S) or
+                       UserInputService:IsKeyDown(Enum.KeyCode.D)
+        if onGround and not moving and Root.Velocity.Magnitude > 0.5 then
+            Root.Velocity = Vector3.new(Root.Velocity.X * 0.8, Root.Velocity.Y, Root.Velocity.Z * 0.8)
+        end
+    end
+
+    -- Speed Boost
+    if S.SpeedBoost then
+        local sprint = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+        Hum.WalkSpeed = sprint and S.BoostSpeed or S.WalkSpeed
+    end
+
+    -- Low Gravity
+    if S.LowGrav then
+        workspace.Gravity = 60
+    elseif not S.LowGrav and workspace.Gravity == 60 then
+        workspace.Gravity = S.Gravity
+    end
+
+    -- Anti Ragdoll
+    if S.AntiRagdoll then
+        if Hum:GetState() == Enum.HumanoidStateType.FallingDown then
+            Hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end
+
+    -- Sync
+    if not S.SpeedBoost and Hum.WalkSpeed ~= S.WalkSpeed then
+        Hum.WalkSpeed = S.WalkSpeed
+    end
+    if Hum.JumpPower ~= S.JumpPower then
+        Hum.JumpPower = S.JumpPower
+    end
+    if not S.LowGrav and workspace.Gravity ~= S.Gravity then
+        workspace.Gravity = S.Gravity
+    end
+end)
+
 -- Respawn
 LP.CharacterAdded:Connect(function(c)
     Char = c
@@ -199,39 +186,50 @@ LP.CharacterAdded:Connect(function(c)
     ApplyPhysics()
     SetupDoubleJump()
     SetupNoClip()
+    SetupAutoJump()
 end)
 
--- ═══════════════════════════════════════════
---          WINDUI STYLE GUI
--- ═══════════════════════════════════════════
-
--- Warna WindUI
-local C = {
-    BG          = Color3.fromRGB(18, 18, 24),
-    Surface     = Color3.fromRGB(26, 27, 36),
-    SurfaceAlt  = Color3.fromRGB(32, 34, 46),
-    Accent      = Color3.fromRGB(99, 155, 255),    -- blue
-    AccentHover = Color3.fromRGB(120, 175, 255),
-    AccentDim   = Color3.fromRGB(60, 100, 200),
-    Green       = Color3.fromRGB(72, 199, 142),
-    Red         = Color3.fromRGB(240, 80, 80),
-    Text        = Color3.fromRGB(220, 222, 235),
-    TextMuted   = Color3.fromRGB(120, 125, 150),
-    Border      = Color3.fromRGB(45, 48, 65),
-    White       = Color3.fromRGB(255, 255, 255),
+-- ══════════════════════════════════════════
+--   GUI  —  Minimalist Dark
+-- ══════════════════════════════════════════
+local COLOR = {
+    BG       = Color3.fromRGB(14, 14, 18),
+    Panel    = Color3.fromRGB(20, 21, 27),
+    Item     = Color3.fromRGB(26, 27, 34),
+    Border   = Color3.fromRGB(38, 40, 52),
+    Accent   = Color3.fromRGB(100, 149, 255),
+    Green    = Color3.fromRGB(80, 200, 140),
+    Red      = Color3.fromRGB(220, 70, 70),
+    Text     = Color3.fromRGB(210, 212, 220),
+    Muted    = Color3.fromRGB(100, 103, 120),
+    White    = Color3.fromRGB(255, 255, 255),
 }
 
-local TI = {
-    fast   = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-    medium = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-    slow   = TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-}
-
-local function Tween(obj, props, ti)
-    TweenService:Create(obj, ti or TI.fast, props):Play()
+local function tw(obj, props, t)
+    TweenService:Create(obj, TweenInfo.new(t or 0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props):Play()
 end
 
--- ─── ScreenGui ───
+local function corner(p, r)
+    local c = Instance.new("UICorner", p)
+    c.CornerRadius = UDim.new(0, r or 6)
+end
+
+local function stroke(p, col, th)
+    local s = Instance.new("UIStroke", p)
+    s.Color = col or COLOR.Border
+    s.Thickness = th or 1
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+end
+
+local function pad(p, t, b, l, r)
+    local u = Instance.new("UIPadding", p)
+    u.PaddingTop    = UDim.new(0, t or 0)
+    u.PaddingBottom = UDim.new(0, b or 0)
+    u.PaddingLeft   = UDim.new(0, l or 0)
+    u.PaddingRight  = UDim.new(0, r or 0)
+end
+
+-- ── ScreenGui ──
 local SG = Instance.new("ScreenGui")
 SG.Name = "WindHub"
 SG.ResetOnSpawn = false
@@ -239,715 +237,515 @@ SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
 
 if syn and syn.protect_gui then
-    syn.protect_gui(SG); SG.Parent = game:GetService("CoreGui")
+    syn.protect_gui(SG)
+    SG.Parent = game:GetService("CoreGui")
 elseif gethui then
     SG.Parent = gethui()
 else
     SG.Parent = LP:WaitForChild("PlayerGui")
 end
 
--- ─── Helper: Round Corner ───
-local function Round(inst, r) 
-    local c = Instance.new("UICorner", inst)
-    c.CornerRadius = UDim.new(0, r or 8)
-    return c
-end
+-- ── Floating Toggle Pill ──
+local Pill = Instance.new("TextButton")
+Pill.Size = UDim2.new(0, 90, 0, 32)
+Pill.Position = UDim2.new(0.5, -45, 0, 14)
+Pill.BackgroundColor3 = COLOR.Panel
+Pill.BorderSizePixel = 0
+Pill.Text = "Wind Hub"
+Pill.TextSize = 12
+Pill.Font = Enum.Font.GothamBold
+Pill.TextColor3 = COLOR.Accent
+Pill.ZIndex = 20
+Pill.Parent = SG
+corner(Pill, 16)
+stroke(Pill, COLOR.Accent, 1)
 
-local function Stroke(inst, col, thick)
-    local s = Instance.new("UIStroke", inst)
-    s.Color = col or C.Border
-    s.Thickness = thick or 1
-    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    return s
-end
-
-local function Pad(inst, t, b, l, r)
-    local p = Instance.new("UIPadding", inst)
-    p.PaddingTop    = UDim.new(0, t or 0)
-    p.PaddingBottom = UDim.new(0, b or 0)
-    p.PaddingLeft   = UDim.new(0, l or 0)
-    p.PaddingRight  = UDim.new(0, r or 0)
-    return p
-end
-
--- ─── TOPBAR BUTTON ───
-local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(0, 46, 0, 46)
-TopBar.Position = UDim2.new(0, 12, 0, 12)
-TopBar.BackgroundColor3 = C.Surface
-TopBar.BorderSizePixel = 0
-TopBar.ZIndex = 10
-TopBar.Parent = SG
-Round(TopBar, 12)
-Stroke(TopBar, C.Border, 1)
-
-local TopIcon = Instance.new("TextLabel")
-TopIcon.Size = UDim2.new(1,0,1,0)
-TopIcon.BackgroundTransparency = 1
-TopIcon.Text = "🌊"
-TopIcon.TextScaled = true
-TopIcon.Font = Enum.Font.GothamBold
-TopIcon.TextColor3 = C.Accent
-TopIcon.ZIndex = 11
-TopIcon.Parent = TopBar
-Pad(TopIcon, 8, 8, 8, 8)
-
-local TopBtn = Instance.new("TextButton")
-TopBtn.Size = UDim2.new(1,0,1,0)
-TopBtn.BackgroundTransparency = 1
-TopBtn.Text = ""
-TopBtn.ZIndex = 12
-TopBtn.Parent = TopBar
-
--- Hover efek topbar
-TopBtn.MouseEnter:Connect(function() Tween(TopBar, {BackgroundColor3 = C.SurfaceAlt}) end)
-TopBtn.MouseLeave:Connect(function() Tween(TopBar, {BackgroundColor3 = C.Surface}) end)
-
--- ─── MAIN WINDOW ───
+-- ── Main Window ──
 local Win = Instance.new("Frame")
-Win.Size = UDim2.new(0, 340, 0, 560)
-Win.Position = UDim2.new(0, 66, 0, 12)
-Win.BackgroundColor3 = C.BG
+Win.Size = UDim2.new(0, 300, 0, 520)
+Win.Position = UDim2.new(0.5, -150, 0, 54)
+Win.BackgroundColor3 = COLOR.BG
 Win.BorderSizePixel = 0
 Win.ClipsDescendants = true
 Win.Visible = false
+Win.ZIndex = 5
 Win.Parent = SG
-Round(Win, 14)
-Stroke(Win, C.Border, 1)
+corner(Win, 12)
+stroke(Win, COLOR.Border, 1)
 
--- Shadow
-local Shadow = Instance.new("ImageLabel")
-Shadow.Size = UDim2.new(1, 30, 1, 30)
-Shadow.Position = UDim2.new(0, -15, 0, -15)
-Shadow.BackgroundTransparency = 1
-Shadow.Image = "rbxassetid://6014261993"
-Shadow.ImageColor3 = Color3.fromRGB(0,0,0)
-Shadow.ImageTransparency = 0.5
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(49,49,450,450)
-Shadow.ZIndex = -1
-Shadow.Parent = Win
+-- ── Header ──
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 44)
+Header.BackgroundColor3 = COLOR.Panel
+Header.BorderSizePixel = 0
+Header.ZIndex = 6
+Header.Parent = Win
 
--- ─── TITLEBAR ───
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 52)
-TitleBar.BackgroundColor3 = C.Surface
-TitleBar.BorderSizePixel = 0
-TitleBar.ZIndex = 2
-TitleBar.Parent = Win
+-- bottom border
+local HBorder = Instance.new("Frame")
+HBorder.Size = UDim2.new(1, 0, 0, 1)
+HBorder.Position = UDim2.new(0, 0, 1, -1)
+HBorder.BackgroundColor3 = COLOR.Border
+HBorder.BorderSizePixel = 0
+HBorder.Parent = Header
 
--- Bottom border on titlebar
-local TBorder = Instance.new("Frame")
-TBorder.Size = UDim2.new(1, 0, 0, 1)
-TBorder.Position = UDim2.new(0, 0, 1, -1)
-TBorder.BackgroundColor3 = C.Border
-TBorder.BorderSizePixel = 0
-TBorder.Parent = TitleBar
+local HTitle = Instance.new("TextLabel")
+HTitle.Size = UDim2.new(1, -50, 1, 0)
+HTitle.Position = UDim2.new(0, 14, 0, 0)
+HTitle.BackgroundTransparency = 1
+HTitle.Text = "Wind Hub  ·  v3"
+HTitle.TextSize = 13
+HTitle.Font = Enum.Font.GothamBold
+HTitle.TextColor3 = COLOR.Text
+HTitle.TextXAlignment = Enum.TextXAlignment.Left
+HTitle.ZIndex = 7
+HTitle.Parent = Header
 
--- Title Icon
-local TIcon = Instance.new("TextLabel")
-TIcon.Size = UDim2.new(0, 30, 1, 0)
-TIcon.Position = UDim2.new(0, 14, 0, 0)
-TIcon.BackgroundTransparency = 1
-TIcon.Text = "🌊"
-TIcon.TextScaled = true
-TIcon.Font = Enum.Font.GothamBold
-TIcon.TextColor3 = C.Accent
-TIcon.Parent = TitleBar
+local HClose = Instance.new("TextButton")
+HClose.Size = UDim2.new(0, 26, 0, 26)
+HClose.Position = UDim2.new(1, -34, 0.5, -13)
+HClose.BackgroundColor3 = COLOR.Item
+HClose.Text = "✕"
+HClose.TextSize = 10
+HClose.Font = Enum.Font.GothamBold
+HClose.TextColor3 = COLOR.Muted
+HClose.BorderSizePixel = 0
+HClose.ZIndex = 7
+HClose.Parent = Header
+corner(HClose, 6)
 
-local TTitle = Instance.new("TextLabel")
-TTitle.Size = UDim2.new(0, 160, 0, 22)
-TTitle.Position = UDim2.new(0, 48, 0.5, -11)
-TTitle.BackgroundTransparency = 1
-TTitle.Text = "Wind Hub"
-TTitle.TextSize = 15
-TTitle.Font = Enum.Font.GothamBold
-TTitle.TextColor3 = C.Text
-TTitle.TextXAlignment = Enum.TextXAlignment.Left
-TTitle.Parent = TitleBar
+HClose.MouseEnter:Connect(function() tw(HClose, {BackgroundColor3 = COLOR.Red, TextColor3 = COLOR.White}) end)
+HClose.MouseLeave:Connect(function() tw(HClose, {BackgroundColor3 = COLOR.Item, TextColor3 = COLOR.Muted}) end)
 
-local TSub = Instance.new("TextLabel")
-TSub.Size = UDim2.new(0, 200, 0, 14)
-TSub.Position = UDim2.new(0, 48, 0.5, 3)
-TSub.BackgroundTransparency = 1
-TSub.Text = "Universal · All Games"
-TSub.TextSize = 11
-TSub.Font = Enum.Font.Gotham
-TSub.TextColor3 = C.TextMuted
-TSub.TextXAlignment = Enum.TextXAlignment.Left
-TSub.Parent = TitleBar
-
--- Badge
-local Badge = Instance.new("Frame")
-Badge.Size = UDim2.new(0, 56, 0, 20)
-Badge.Position = UDim2.new(1, -72, 0.5, -10)
-Badge.BackgroundColor3 = C.AccentDim
-Badge.BorderSizePixel = 0
-Badge.Parent = TitleBar
-Round(Badge, 10)
-
-local BadgeTxt = Instance.new("TextLabel")
-BadgeTxt.Size = UDim2.new(1,0,1,0)
-BadgeTxt.BackgroundTransparency = 1
-BadgeTxt.Text = "v2.0"
-BadgeTxt.TextSize = 10
-BadgeTxt.Font = Enum.Font.GothamBold
-BadgeTxt.TextColor3 = C.Accent
-BadgeTxt.Parent = Badge
-
--- Close button
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -38, 0.5, -14)
-CloseBtn.BackgroundColor3 = C.SurfaceAlt
-CloseBtn.Text = "✕"
-CloseBtn.TextSize = 11
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextColor3 = C.TextMuted
-CloseBtn.BorderSizePixel = 0
-CloseBtn.Parent = TitleBar
-Round(CloseBtn, 7)
-
-CloseBtn.MouseEnter:Connect(function()
-    Tween(CloseBtn, {BackgroundColor3 = C.Red, TextColor3 = C.White})
-end)
-CloseBtn.MouseLeave:Connect(function()
-    Tween(CloseBtn, {BackgroundColor3 = C.SurfaceAlt, TextColor3 = C.TextMuted})
-end)
-
--- ─── SCROLL CONTENT ───
+-- ── Scroll ──
 local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, 0, 1, -52)
-Scroll.Position = UDim2.new(0, 0, 0, 52)
+Scroll.Size = UDim2.new(1, 0, 1, -44)
+Scroll.Position = UDim2.new(0, 0, 0, 44)
 Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
-Scroll.ScrollBarThickness = 3
-Scroll.ScrollBarImageColor3 = C.Accent
-Scroll.ScrollBarImageTransparency = 0.5
+Scroll.ScrollBarThickness = 2
+Scroll.ScrollBarImageColor3 = COLOR.Accent
+Scroll.ScrollBarImageTransparency = 0.4
 Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Scroll.ZIndex = 6
 Scroll.Parent = Win
 
-local Layout = Instance.new("UIListLayout", Scroll)
-Layout.SortOrder = Enum.SortOrder.LayoutOrder
-Layout.Padding = UDim.new(0, 4)
+local ListLayout = Instance.new("UIListLayout", Scroll)
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, 3)
+pad(Scroll, 8, 10, 8, 8)
 
-Pad(Scroll, 10, 14, 12, 12)
+local order = 0
+local function O() order += 1; return order end
 
-local layoutOrder = 0
-local function nextOrder()
-    layoutOrder += 1
-    return layoutOrder
+-- ────────────────────────────────────
+--   COMPONENT BUILDERS
+-- ────────────────────────────────────
+
+-- Section label
+local function Section(name)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, 22)
+    f.BackgroundTransparency = 1
+    f.LayoutOrder = O()
+    f.Parent = Scroll
+
+    local l = Instance.new("TextLabel", f)
+    l.Size = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = string.upper(name)
+    l.TextSize = 9
+    l.Font = Enum.Font.GothamBold
+    l.TextColor3 = COLOR.Muted
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.ZIndex = 7
+    pad(l, 0, 0, 4, 0)
 end
 
--- ─────────────────────────────────────────────
---          UI COMPONENT BUILDERS
--- ─────────────────────────────────────────────
-
--- ── Section Header ──
-local function Section(title, icon)
-    local F = Instance.new("Frame")
-    F.Size = UDim2.new(1, 0, 0, 28)
-    F.BackgroundTransparency = 1
-    F.LayoutOrder = nextOrder()
-    F.Parent = Scroll
-
-    -- Left line accent
-    local Accent = Instance.new("Frame")
-    Accent.Size = UDim2.new(0, 3, 0, 16)
-    Accent.Position = UDim2.new(0, 0, 0.5, -8)
-    Accent.BackgroundColor3 = C.Accent
-    Accent.BorderSizePixel = 0
-    Accent.Parent = F
-    Round(Accent, 2)
-
-    local L = Instance.new("TextLabel")
-    L.Size = UDim2.new(1, -10, 1, 0)
-    L.Position = UDim2.new(0, 10, 0, 0)
-    L.BackgroundTransparency = 1
-    L.Text = (icon and icon .. "  " or "") .. string.upper(title)
-    L.TextSize = 10
-    L.Font = Enum.Font.GothamBold
-    L.TextColor3 = C.Accent
-    L.TextXAlignment = Enum.TextXAlignment.Left
-
-    L.Parent = F
-
-    return F
-end
-
--- ── Toggle ──
-local function Toggle(label, desc, key, icon, callback)
+-- Toggle row
+local function Toggle(label, key, cb)
     local Row = Instance.new("Frame")
-    Row.Size = UDim2.new(1, 0, 0, 52)
-    Row.BackgroundColor3 = C.Surface
+    Row.Size = UDim2.new(1, 0, 0, 40)
+    Row.BackgroundColor3 = COLOR.Item
     Row.BorderSizePixel = 0
-    Row.LayoutOrder = nextOrder()
+    Row.LayoutOrder = O()
+    Row.ZIndex = 7
     Row.Parent = Scroll
-    Round(Row, 10)
-    Stroke(Row, C.Border, 1)
+    corner(Row, 7)
+    stroke(Row, COLOR.Border)
 
-    -- Icon pill
-    local IPill = Instance.new("Frame")
-    IPill.Size = UDim2.new(0, 36, 0, 36)
-    IPill.Position = UDim2.new(0, 8, 0.5, -18)
-    IPill.BackgroundColor3 = C.SurfaceAlt
-    IPill.BorderSizePixel = 0
-    IPill.Parent = Row
-    Round(IPill, 9)
-
-    local ILbl = Instance.new("TextLabel")
-    ILbl.Size = UDim2.new(1,0,1,0)
-    ILbl.BackgroundTransparency = 1
-    ILbl.Text = icon or "◆"
-    ILbl.TextScaled = true
-    ILbl.Parent = IPill
-    Pad(ILbl, 6,6,6,6)
-
-    -- Label
-    local Lbl = Instance.new("TextLabel")
-    Lbl.Size = UDim2.new(1, -108, 0, 18)
-    Lbl.Position = UDim2.new(0, 52, 0.5, -18)
+    local Lbl = Instance.new("TextLabel", Row)
+    Lbl.Size = UDim2.new(1, -60, 1, 0)
+    Lbl.Position = UDim2.new(0, 12, 0, 0)
     Lbl.BackgroundTransparency = 1
     Lbl.Text = label
-    Lbl.TextSize = 13
-    Lbl.Font = Enum.Font.GothamBold
-    Lbl.TextColor3 = C.Text
+    Lbl.TextSize = 12
+    Lbl.Font = Enum.Font.Gotham
+    Lbl.TextColor3 = COLOR.Text
     Lbl.TextXAlignment = Enum.TextXAlignment.Left
-    Lbl.Parent = Row
+    Lbl.ZIndex = 8
 
-    -- Desc
-    local Desc = Instance.new("TextLabel")
-    Desc.Size = UDim2.new(1, -108, 0, 14)
-    Desc.Position = UDim2.new(0, 52, 0.5, 2)
-    Desc.BackgroundTransparency = 1
-    Desc.Text = desc or ""
-    Desc.TextSize = 10
-    Desc.Font = Enum.Font.Gotham
-    Desc.TextColor3 = C.TextMuted
-    Desc.TextXAlignment = Enum.TextXAlignment.Left
-    Desc.Parent = Row
-
-    -- Toggle Track
-    local Track = Instance.new("Frame")
-    Track.Size = UDim2.new(0, 42, 0, 22)
-    Track.Position = UDim2.new(1, -52, 0.5, -11)
+    -- Track
+    local Track = Instance.new("Frame", Row)
+    Track.Size = UDim2.new(0, 36, 0, 18)
+    Track.Position = UDim2.new(1, -46, 0.5, -9)
     Track.BorderSizePixel = 0
-    Track.Parent = Row
-    Round(Track, 11)
+    Track.ZIndex = 8
+    corner(Track, 9)
 
-    local Knob = Instance.new("Frame")
-    Knob.Size = UDim2.new(0, 16, 0, 16)
-    Knob.BackgroundColor3 = C.White
+    local Knob = Instance.new("Frame", Track)
+    Knob.Size = UDim2.new(0, 12, 0, 12)
+    Knob.BackgroundColor3 = COLOR.White
     Knob.BorderSizePixel = 0
-    Knob.ZIndex = 5
-    Knob.Parent = Track
-    Round(Knob, 8)
+    Knob.ZIndex = 9
+    corner(Knob, 6)
 
-    local state = S[key]
     local function Refresh()
-        state = S[key]
-        if state then
-            Tween(Track, {BackgroundColor3 = C.Green})
-            Tween(Knob, {Position = UDim2.new(0, 22, 0.5, -8)})
-            Tween(IPill, {BackgroundColor3 = Color3.fromRGB(25,50,40)})
+        if S[key] then
+            tw(Track, {BackgroundColor3 = COLOR.Green})
+            tw(Knob,  {Position = UDim2.new(0, 21, 0.5, -6)})
+            tw(Lbl,   {TextColor3 = COLOR.White})
         else
-            Tween(Track, {BackgroundColor3 = C.SurfaceAlt})
-            Tween(Knob, {Position = UDim2.new(0, 4, 0.5, -8)})
-            Tween(IPill, {BackgroundColor3 = C.SurfaceAlt})
+            tw(Track, {BackgroundColor3 = COLOR.Border})
+            tw(Knob,  {Position = UDim2.new(0, 3, 0.5, -6)})
+            tw(Lbl,   {TextColor3 = COLOR.Text})
         end
     end
     Refresh()
 
-    local Btn = Instance.new("TextButton")
-    Btn.Size = UDim2.new(1,0,1,0)
+    local Btn = Instance.new("TextButton", Row)
+    Btn.Size = UDim2.new(1, 0, 1, 0)
     Btn.BackgroundTransparency = 1
     Btn.Text = ""
-    Btn.ZIndex = 6
-    Btn.Parent = Row
+    Btn.ZIndex = 10
 
-    Btn.MouseEnter:Connect(function() Tween(Row, {BackgroundColor3 = C.SurfaceAlt}) end)
-    Btn.MouseLeave:Connect(function() Tween(Row, {BackgroundColor3 = C.Surface}) end)
+    Btn.MouseEnter:Connect(function() tw(Row, {BackgroundColor3 = Color3.fromRGB(32, 34, 42)}) end)
+    Btn.MouseLeave:Connect(function() tw(Row, {BackgroundColor3 = COLOR.Item}) end)
     Btn.MouseButton1Click:Connect(function()
         S[key] = not S[key]
         Refresh()
         ApplyPhysics()
-        if callback then callback(S[key]) end
+        if cb then cb(S[key]) end
     end)
 
     return Row
 end
 
--- ── Slider ──
-local function Slider(label, key, minV, maxV, decimals, icon, desc)
-    decimals = decimals or 0
+-- Slider row
+local function Slider(label, key, minV, maxV, dec)
+    dec = dec or 0
     local Row = Instance.new("Frame")
-    Row.Size = UDim2.new(1, 0, 0, 64)
-    Row.BackgroundColor3 = C.Surface
+    Row.Size = UDim2.new(1, 0, 0, 52)
+    Row.BackgroundColor3 = COLOR.Item
     Row.BorderSizePixel = 0
-    Row.LayoutOrder = nextOrder()
+    Row.LayoutOrder = O()
+    Row.ZIndex = 7
     Row.Parent = Scroll
-    Round(Row, 10)
-    Stroke(Row, C.Border, 1)
+    corner(Row, 7)
+    stroke(Row, COLOR.Border)
 
-    -- Icon pill
-    local IPill = Instance.new("Frame")
-    IPill.Size = UDim2.new(0, 32, 0, 32)
-    IPill.Position = UDim2.new(0, 8, 0, 8)
-    IPill.BackgroundColor3 = C.SurfaceAlt
-    IPill.BorderSizePixel = 0
-    IPill.Parent = Row
-    Round(IPill, 8)
-
-    local ILbl = Instance.new("TextLabel")
-    ILbl.Size = UDim2.new(1,0,1,0)
-    ILbl.BackgroundTransparency = 1
-    ILbl.Text = icon or "◆"
-    ILbl.TextScaled = true
-    ILbl.Parent = IPill
-    Pad(ILbl, 5,5,5,5)
-
-    local Lbl = Instance.new("TextLabel")
-    Lbl.Size = UDim2.new(0.55, 0, 0, 18)
-    Lbl.Position = UDim2.new(0, 48, 0, 8)
+    local Lbl = Instance.new("TextLabel", Row)
+    Lbl.Size = UDim2.new(0.6, 0, 0, 20)
+    Lbl.Position = UDim2.new(0, 12, 0, 7)
     Lbl.BackgroundTransparency = 1
     Lbl.Text = label
     Lbl.TextSize = 12
-    Lbl.Font = Enum.Font.GothamBold
-    Lbl.TextColor3 = C.Text
+    Lbl.Font = Enum.Font.Gotham
+    Lbl.TextColor3 = COLOR.Text
     Lbl.TextXAlignment = Enum.TextXAlignment.Left
-    Lbl.Parent = Row
+    Lbl.ZIndex = 8
 
-    local ValLbl = Instance.new("TextLabel")
-    ValLbl.Size = UDim2.new(0.4, 0, 0, 18)
-    ValLbl.Position = UDim2.new(0.58, 0, 0, 8)
-    ValLbl.BackgroundTransparency = 1
-    ValLbl.TextSize = 12
-    ValLbl.Font = Enum.Font.GothamBold
-    ValLbl.TextColor3 = C.Accent
-    ValLbl.TextXAlignment = Enum.TextXAlignment.Right
-    ValLbl.Parent = Row
+    local Val = Instance.new("TextLabel", Row)
+    Val.Size = UDim2.new(0.35, 0, 0, 20)
+    Val.Position = UDim2.new(0.63, 0, 0, 7)
+    Val.BackgroundTransparency = 1
+    Val.TextSize = 12
+    Val.Font = Enum.Font.GothamBold
+    Val.TextColor3 = COLOR.Accent
+    Val.TextXAlignment = Enum.TextXAlignment.Right
+    Val.ZIndex = 8
 
     -- Track
-    local TrackBG = Instance.new("Frame")
-    TrackBG.Size = UDim2.new(1, -16, 0, 6)
-    TrackBG.Position = UDim2.new(0, 8, 0, 44)
-    TrackBG.BackgroundColor3 = C.SurfaceAlt
-    TrackBG.BorderSizePixel = 0
-    TrackBG.Parent = Row
-    Round(TrackBG, 3)
-    Stroke(TrackBG, C.Border, 1)
+    local TBG = Instance.new("Frame", Row)
+    TBG.Size = UDim2.new(1, -24, 0, 4)
+    TBG.Position = UDim2.new(0, 12, 0, 36)
+    TBG.BackgroundColor3 = COLOR.Border
+    TBG.BorderSizePixel = 0
+    TBG.ZIndex = 8
+    corner(TBG, 2)
 
-    local Fill = Instance.new("Frame")
-    Fill.BackgroundColor3 = C.Accent
+    local Fill = Instance.new("Frame", TBG)
+    Fill.BackgroundColor3 = COLOR.Accent
     Fill.BorderSizePixel = 0
-    Fill.ZIndex = 2
-    Fill.Parent = TrackBG
-    Round(Fill, 3)
+    Fill.ZIndex = 9
+    corner(Fill, 2)
 
-    local Knob = Instance.new("Frame")
-    Knob.Size = UDim2.new(0, 14, 0, 14)
-    Knob.BackgroundColor3 = C.White
+    local Knob = Instance.new("Frame", TBG)
+    Knob.Size = UDim2.new(0, 12, 0, 12)
+    Knob.BackgroundColor3 = COLOR.White
     Knob.BorderSizePixel = 0
-    Knob.ZIndex = 3
-    Knob.Parent = TrackBG
-    Round(Knob, 7)
-    Stroke(Knob, C.Accent, 2)
+    Knob.ZIndex = 10
+    corner(Knob, 6)
 
-    local function UpdateSlider(val)
-        local mult = 10 ^ decimals
-        val = math.clamp(math.round(val * mult) / mult, minV, maxV)
-        S[key] = val
-        ValLbl.Text = tostring(val)
-        local pct = (val - minV) / (maxV - minV)
+    local function Update(v)
+        local m = 10 ^ dec
+        v = math.clamp(math.round(v * m) / m, minV, maxV)
+        S[key] = v
+        Val.Text = tostring(v)
+        local pct = (v - minV) / (maxV - minV)
         Fill.Size = UDim2.new(pct, 0, 1, 0)
-        Knob.Position = UDim2.new(pct, -7, 0.5, -7)
+        Knob.Position = UDim2.new(pct, -6, 0.5, -6)
         ApplyPhysics()
     end
-    UpdateSlider(S[key])
+    Update(S[key])
 
-    local dragging = false
+    local drag = false
     Knob.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
     end)
     UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
     end)
     UserInputService.InputChanged:Connect(function(i)
-        if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-            local rx = math.clamp(i.Position.X - TrackBG.AbsolutePosition.X, 0, TrackBG.AbsoluteSize.X)
-            UpdateSlider(minV + (maxV - minV) * (rx / TrackBG.AbsoluteSize.X))
+        if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+            local rx = math.clamp(i.Position.X - TBG.AbsolutePosition.X, 0, TBG.AbsoluteSize.X)
+            Update(minV + (maxV - minV) * (rx / TBG.AbsoluteSize.X))
         end
     end)
-    TrackBG.InputBegan:Connect(function(i)
+    TBG.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            local rx = math.clamp(i.Position.X - TrackBG.AbsolutePosition.X, 0, TrackBG.AbsoluteSize.X)
-            UpdateSlider(minV + (maxV - minV) * (rx / TrackBG.AbsoluteSize.X))
+            local rx = math.clamp(i.Position.X - TBG.AbsolutePosition.X, 0, TBG.AbsoluteSize.X)
+            Update(minV + (maxV - minV) * (rx / TBG.AbsoluteSize.X))
         end
     end)
-
-    return Row
 end
 
--- ── Button ──
-local function Button(label, icon, color, callback)
-    local Row = Instance.new("TextButton")
-    Row.Size = UDim2.new(1, 0, 0, 40)
-    Row.BackgroundColor3 = color or C.SurfaceAlt
-    Row.BorderSizePixel = 0
-    Row.Text = ""
-    Row.LayoutOrder = nextOrder()
-    Row.Parent = Scroll
-    Round(Row, 10)
-    Stroke(Row, C.Border, 1)
+-- Button row
+local function Button(label, col, cb)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 36)
+    Btn.BackgroundColor3 = col or COLOR.Item
+    Btn.BorderSizePixel = 0
+    Btn.Text = label
+    Btn.TextSize = 12
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextColor3 = COLOR.Text
+    Btn.LayoutOrder = O()
+    Btn.ZIndex = 7
+    Btn.Parent = Scroll
+    corner(Btn, 7)
+    stroke(Btn, COLOR.Border)
 
-    local ILbl = Instance.new("TextLabel")
-    ILbl.Size = UDim2.new(0, 24, 1, 0)
-    ILbl.Position = UDim2.new(0, 12, 0, 0)
-    ILbl.BackgroundTransparency = 1
-    ILbl.Text = icon or ""
-    ILbl.TextScaled = true
-    ILbl.Parent = Row
-    Pad(ILbl, 9,9,0,0)
-
-    local Lbl = Instance.new("TextLabel")
-    Lbl.Size = UDim2.new(1, -50, 1, 0)
-    Lbl.Position = UDim2.new(0, 40, 0, 0)
-    Lbl.BackgroundTransparency = 1
-    Lbl.Text = label
-    Lbl.TextSize = 13
-    Lbl.Font = Enum.Font.GothamBold
-    Lbl.TextColor3 = C.Text
-    Lbl.TextXAlignment = Enum.TextXAlignment.Left
-    Lbl.Parent = Row
-
-    Row.MouseEnter:Connect(function()
-        Tween(Row, {BackgroundColor3 = Color3.fromRGB(
-            math.clamp((color or C.SurfaceAlt).R * 255 + 12, 0, 255),
-            math.clamp((color or C.SurfaceAlt).G * 255 + 12, 0, 255),
-            math.clamp((color or C.SurfaceAlt).B * 255 + 12, 0, 255)
-        )})
-    end)
-    Row.MouseLeave:Connect(function() Tween(Row, {BackgroundColor3 = color or C.SurfaceAlt}) end)
-    Row.MouseButton1Click:Connect(function()
-        Tween(Row, {BackgroundColor3 = C.Accent})
-        task.delay(0.15, function() Tween(Row, {BackgroundColor3 = color or C.SurfaceAlt}) end)
-        if callback then callback() end
-    end)
-
-    return Row
+    Btn.MouseEnter:Connect(function() tw(Btn, {BackgroundColor3 = COLOR.Accent, TextColor3 = COLOR.White}) end)
+    Btn.MouseLeave:Connect(function() tw(Btn, {BackgroundColor3 = col or COLOR.Item, TextColor3 = COLOR.Text}) end)
+    Btn.MouseButton1Click:Connect(function() if cb then cb() end end)
 end
 
--- ── Spacer ──
-local function Spacer(h)
-    local F = Instance.new("Frame")
-    F.Size = UDim2.new(1, 0, 0, h or 4)
-    F.BackgroundTransparency = 1
-    F.LayoutOrder = nextOrder()
-    F.Parent = Scroll
+local function Gap(h)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, 0, 0, h or 3)
+    f.BackgroundTransparency = 1
+    f.LayoutOrder = O()
+    f.Parent = Scroll
 end
 
--- ═══════════════════════════════════════════
---           BUILD MENU CONTENT
--- ═══════════════════════════════════════════
+-- ────────────────────────────────────
+--   BUILD MENU
+-- ────────────────────────────────────
 
-Spacer(2)
+-- ⚠️ Info
+local Info = Instance.new("TextLabel")
+Info.Size = UDim2.new(1, 0, 0, 28)
+Info.BackgroundColor3 = Color3.fromRGB(30, 25, 15)
+Info.BorderSizePixel = 0
+Info.Text = "⚠  Semua fitur OFF by default"
+Info.TextSize = 10
+Info.Font = Enum.Font.Gotham
+Info.TextColor3 = Color3.fromRGB(220, 170, 60)
+Info.LayoutOrder = O()
+Info.ZIndex = 7
+Info.Parent = Scroll
+corner(Info, 6)
+stroke(Info, Color3.fromRGB(80, 60, 20))
 
--- ── SECTION: Proteksi ──
-Section("Proteksi", "🛡️")
+Gap()
 
-Toggle("Anti Jatuh", "Kurangi kecepatan jatuh", "AntiJatuh", "🛡️")
-Toggle("Anti Slip", "Gesekan kuat di tangga & gunung", "AntiSlip", "🏔️")
-Toggle("Auto Stabilize", "Berhenti slide saat diam di lereng", "AutoStabilize", "⚖️")
+Section("PROTEKSI")
+Toggle("Anti Jatuh",     "AntiJatuh")
+Toggle("Anti Slip",      "AntiSlip")
+Toggle("Auto Stabilize", "AutoStabilize")
+Toggle("Anti Ragdoll",   "AntiRagdoll")
 
-Spacer()
+Gap()
+Section("LOMPATAN")
+Toggle("Double Jump",    "DoubleJump",    function() SetupDoubleJump() end)
+Toggle("Infinite Jump",  "InfiniteJump",  function(v) if v then S.DoubleJump = false end SetupDoubleJump() end)
 
--- ── SECTION: Lompat ──
-Section("Lompatan", "🦘")
+Gap()
+Section("GERAKAN")
+Toggle("Speed Boost (Shift)", "SpeedBoost")
+Toggle("Low Gravity",         "LowGrav")
+Toggle("No Clip",             "NoClip",   function() SetupNoClip() end)
+Toggle("Auto Jump",           "AutoJump", function() SetupAutoJump() end)
 
-Toggle("Double Jump", "Lompat 2x di udara", "DoubleJump", "🦘", function(v)
-    SetupDoubleJump()
-end)
+Gap()
+Section("PENGATURAN")
+Slider("Walk Speed",      "WalkSpeed",    2,   250, 0)
+Slider("Boost Speed",     "BoostSpeed",   2,   350, 0)
+Slider("Jump Power",      "JumpPower",    0,   250, 0)
+Slider("Gravitasi",       "Gravity",      10,  500, 1)
+Slider("Friction",        "FrictionMult", 0.1, 10,  1)
 
-Toggle("Infinite Jump", "Lompat tanpa batas (non-stop)", "InfiniteJump", "♾️", function(v)
-    if v then S.DoubleJump = false end
-    SetupDoubleJump()
-end)
-
-Spacer()
-
--- ── SECTION: Gerakan ──
-Section("Gerakan", "⚡")
-
-Toggle("Speed Boost", "Tahan Shift untuk sprint", "SpeedBoost", "🚀")
-Toggle("No Clip", "Tembus dinding/lantai", "NoClip", "👻", function() SetupNoClip() end)
-
-Spacer()
-
--- ── SECTION: Sliders ──
-Section("Pengaturan", "🔧")
-
-Slider("Walk Speed",       "WalkSpeed",    2,    250, 0, "🏃", "Kecepatan berjalan")
-Slider("Boost Speed",      "BoostSpeed",   2,    350, 0, "🚀", "Kecepatan saat sprint")
-Slider("Jump Power",       "JumpPower",    0,    250, 0, "⬆️",  "Tinggi lompatan")
-Slider("Gravitasi",        "Gravity",      10,   500, 1, "🌍", "Gravitasi dunia")
-Slider("Friction (Anti Slip)", "FrictionMult", 0.1, 10, 1, "🧲", "Gesekan di slope/tangga")
-
-Spacer()
-
--- ── SECTION: Actions ──
-Section("Aksi", "⚙️")
-
-Button("Reset ke Default", "🔄", C.SurfaceAlt, function()
-    S.AntiJatuh     = true
-    S.AntiSlip      = true
-    S.AutoStabilize = true
-    S.DoubleJump    = true
+Gap()
+Section("AKSI")
+Button("Reset Default", COLOR.Item, function()
+    S.AntiJatuh     = false
+    S.AntiSlip      = false
+    S.AutoStabilize = false
+    S.DoubleJump    = false
     S.InfiniteJump  = false
     S.NoClip        = false
     S.SpeedBoost    = false
+    S.LowGrav       = false
+    S.AntiRagdoll   = false
+    S.AutoJump      = false
     S.WalkSpeed     = 16
     S.JumpPower     = 50
     S.Gravity       = 196.2
     S.FrictionMult  = 3.5
-    S.BoostSpeed    = 32
+    S.BoostSpeed    = 40
+    workspace.Gravity = 196.2
     ApplyPhysics()
     SetupDoubleJump()
     SetupNoClip()
-    
+    SetupAutoJump()
+
     -- Rebuild scroll
     for _, c in pairs(Scroll:GetChildren()) do
-        if not c:IsA("UIListLayout") and not c:IsA("UIPadding") then c:Destroy() end
+        if not c:IsA("UIListLayout") and not c:IsA("UIPadding") then
+            c:Destroy()
+        end
     end
-    layoutOrder = 0
-    Spacer(2)
-    Section("Proteksi","🛡️")
-    Toggle("Anti Jatuh","Kurangi kecepatan jatuh","AntiJatuh","🛡️")
-    Toggle("Anti Slip","Gesekan kuat di tangga & gunung","AntiSlip","🏔️")
-    Toggle("Auto Stabilize","Berhenti slide saat diam di lereng","AutoStabilize","⚖️")
-    Spacer()
-    Section("Lompatan","🦘")
-    Toggle("Double Jump","Lompat 2x di udara","DoubleJump","🦘",function() SetupDoubleJump() end)
-    Toggle("Infinite Jump","Lompat tanpa batas","InfiniteJump","♾️")
-    Spacer()
-    Section("Gerakan","⚡")
-    Toggle("Speed Boost","Tahan Shift untuk sprint","SpeedBoost","🚀")
-    Toggle("No Clip","Tembus dinding/lantai","NoClip","👻",function() SetupNoClip() end)
-    Spacer()
-    Section("Pengaturan","🔧")
-    Slider("Walk Speed","WalkSpeed",2,250,0,"🏃")
-    Slider("Boost Speed","BoostSpeed",2,350,0,"🚀")
-    Slider("Jump Power","JumpPower",0,250,0,"⬆️")
-    Slider("Gravitasi","Gravity",10,500,1,"🌍")
-    Slider("Friction (Anti Slip)","FrictionMult",0.1,10,1,"🧲")
-    Spacer()
-    Section("Aksi","⚙️")
-    Button("Reset ke Default","🔄",C.SurfaceAlt)
+    order = 0
+
+    local InfoR = Instance.new("TextLabel")
+    InfoR.Size = UDim2.new(1, 0, 0, 28)
+    InfoR.BackgroundColor3 = Color3.fromRGB(30, 25, 15)
+    InfoR.BorderSizePixel = 0
+    InfoR.Text = "✅  Reset berhasil!"
+    InfoR.TextSize = 10
+    InfoR.Font = Enum.Font.Gotham
+    InfoR.TextColor3 = Color3.fromRGB(80, 200, 140)
+    InfoR.LayoutOrder = O()
+    InfoR.ZIndex = 7
+    InfoR.Parent = Scroll
+    corner(InfoR)
+    stroke(InfoR, Color3.fromRGB(30, 70, 40))
+    task.delay(2, function()
+        InfoR.Text = "⚠  Semua fitur OFF by default"
+        InfoR.TextColor3 = Color3.fromRGB(220, 170, 60)
+        InfoR.BackgroundColor3 = Color3.fromRGB(30, 25, 15)
+    end)
+
+    Gap()
+    Section("PROTEKSI")
+    Toggle("Anti Jatuh","AntiJatuh")
+    Toggle("Anti Slip","AntiSlip")
+    Toggle("Auto Stabilize","AutoStabilize")
+    Toggle("Anti Ragdoll","AntiRagdoll")
+    Gap()
+    Section("LOMPATAN")
+    Toggle("Double Jump","DoubleJump",function() SetupDoubleJump() end)
+    Toggle("Infinite Jump","InfiniteJump",function(v) if v then S.DoubleJump=false end SetupDoubleJump() end)
+    Gap()
+    Section("GERAKAN")
+    Toggle("Speed Boost (Shift)","SpeedBoost")
+    Toggle("Low Gravity","LowGrav")
+    Toggle("No Clip","NoClip",function() SetupNoClip() end)
+    Toggle("Auto Jump","AutoJump",function() SetupAutoJump() end)
+    Gap()
+    Section("PENGATURAN")
+    Slider("Walk Speed","WalkSpeed",2,250,0)
+    Slider("Boost Speed","BoostSpeed",2,350,0)
+    Slider("Jump Power","JumpPower",0,250,0)
+    Slider("Gravitasi","Gravity",10,500,1)
+    Slider("Friction","FrictionMult",0.1,10,1)
+    Gap()
+    Section("AKSI")
+    Button("Reset Default",COLOR.Item)
 end)
 
-Spacer(4)
+Gap(4)
 
--- ═══════════════════════════════════════════
---         TOGGLE WINDOW OPEN/CLOSE
--- ═══════════════════════════════════════════
+-- ────────────────────────────────────
+--   OPEN / CLOSE
+-- ────────────────────────────────────
 local isOpen = false
 
-local function OpenWindow()
+local function Open()
     isOpen = true
     Win.Visible = true
-    Win.Size = UDim2.new(0, 340, 0, 0)
-    Win.BackgroundTransparency = 1
-    Tween(Win, {Size = UDim2.new(0, 340, 0, 560), BackgroundTransparency = 0}, TI.medium)
-    Tween(TopBar, {BackgroundColor3 = C.Accent})
+    Win.Size = UDim2.new(0, 300, 0, 0)
+    tw(Win, {Size = UDim2.new(0, 300, 0, 520)}, 0.22)
+    tw(Pill, {BackgroundColor3 = COLOR.Accent, TextColor3 = COLOR.White})
 end
 
-local function CloseWindow()
+local function Close()
     isOpen = false
-    Tween(Win, {Size = UDim2.new(0, 340, 0, 0), BackgroundTransparency = 1}, TI.medium)
-    Tween(TopBar, {BackgroundColor3 = C.Surface})
-    task.delay(0.3, function()
+    tw(Win, {Size = UDim2.new(0, 300, 0, 0)}, 0.18)
+    tw(Pill, {BackgroundColor3 = COLOR.Panel, TextColor3 = COLOR.Accent})
+    task.delay(0.2, function()
         if not isOpen then Win.Visible = false end
     end)
 end
 
-TopBtn.MouseButton1Click:Connect(function()
-    if isOpen then CloseWindow() else OpenWindow() end
+Pill.MouseButton1Click:Connect(function()
+    if isOpen then Close() else Open() end
 end)
 
-CloseBtn.MouseButton1Click:Connect(CloseWindow)
+HClose.MouseButton1Click:Connect(Close)
 
--- Keyboard shortcut [K]
+-- Keyboard: RightShift
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
-    if inp.KeyCode == Enum.KeyCode.K then
-        if isOpen then CloseWindow() else OpenWindow() end
+    if inp.KeyCode == Enum.KeyCode.RightShift then
+        if isOpen then Close() else Open() end
     end
 end)
 
--- ─── DRAG WINDOW ───
-local dragStart2, startPos2, dragActive = nil, nil, false
-
-TitleBar.InputBegan:Connect(function(i)
+-- ── Drag Window ──
+local ds, sp, da = nil, nil, false
+Header.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragActive = true
-        dragStart2 = i.Position
-        startPos2  = Win.Position
+        da = true; ds = i.Position; sp = Win.Position
     end
 end)
 UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragActive = false end
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then da = false end
 end)
 UserInputService.InputChanged:Connect(function(i)
-    if dragActive and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = i.Position - dragStart2
-        Win.Position = UDim2.new(startPos2.X.Scale, startPos2.X.Offset + d.X, startPos2.Y.Scale, startPos2.Y.Offset + d.Y)
+    if da and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - ds
+        Win.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
     end
 end)
 
--- ═══════════════════════════════════════════
---         NOTIFICATION TOAST
--- ═══════════════════════════════════════════
-local function Toast(msg, col)
-    local T = Instance.new("Frame")
-    T.Size = UDim2.new(0, 280, 0, 44)
-    T.Position = UDim2.new(0.5, -140, 1, 60)
-    T.BackgroundColor3 = col or C.Surface
-    T.BorderSizePixel = 0
-    T.ZIndex = 20
-    T.Parent = SG
-    Round(T, 10)
-    Stroke(T, col or C.Accent, 1)
-
-    local TL = Instance.new("TextLabel")
-    TL.Size = UDim2.new(1, -16, 1, 0)
-    TL.Position = UDim2.new(0, 8, 0, 0)
-    TL.BackgroundTransparency = 1
-    TL.Text = msg
-    TL.TextSize = 12
-    TL.Font = Enum.Font.GothamBold
-    TL.TextColor3 = C.Text
-    TL.TextWrapped = true
-    TL.ZIndex = 21
-    TL.Parent = T
-
-    Tween(T, {Position = UDim2.new(0.5, -140, 1, -58)}, TI.medium)
-    task.delay(3, function()
-        Tween(T, {Position = UDim2.new(0.5, -140, 1, 60), BackgroundTransparency = 1})
-        task.delay(0.35, function() T:Destroy() end)
-    end)
-end
-
--- ═══════════════════════════════════════════
---              INIT
--- ═══════════════════════════════════════════
-ApplyPhysics()
-SetupDoubleJump()
-
-task.delay(0.5, function()
-    Toast("🌊 Wind Hub aktif!  Tekan [K] untuk buka menu", C.Surface)
+-- ── Drag Pill ──
+local ps, pp, pd = nil, nil, false
+Pill.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        pd = true; ps = i.Position; pp = Pill.Position
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then pd = false end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if pd and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - ps
+        Pill.Position = UDim2.new(pp.X.Scale, pp.X.Offset + d.X, pp.Y.Scale, pp.Y.Offset + d.Y)
+    end
 end)
 
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("  🌊 Wind Hub Loaded!")
-print("  Tekan [K] untuk buka menu")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("[Wind Hub v3] Loaded! Tekan RightShift untuk menu.")
